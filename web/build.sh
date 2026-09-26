@@ -46,7 +46,7 @@ cp web/index.html "$HOME/Games/rvip-tools/web/rvip-wm.js" web/zangband.js "$OUT/
 cp web/tiles.webp "$OUT/"
 # Help: the game guide from ~/Desktop/Games/Roguelikes/Docs (zangband.html)
 python3 web/make-help.py > "$OUT/help.html"
-# Town music (depth 0), as Quickband/TinyAngband
-mkdir -p "$OUT/music" && cp ../quickband/web/music/new_town.ogg "$OUT/music/"
+# Town music (depth 0), vendored from Quickband
+mkdir -p "$OUT/music" && cp web/music/new_town.ogg "$OUT/music/"
 rm -rf web/stage
 ls -la "$OUT"
