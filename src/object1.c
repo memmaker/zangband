@@ -1846,6 +1846,12 @@ void display_equip(void)
  *
  * Hack -- do not display "trailing" empty slots
  */
+/* RVIP: column of the last show_list() / show_equip() */
+int show_list_col = 0;
+
+/* RVIP: item chosen in the inventory screen, taken by the next get_item() */
+object_type *get_item_preselect = NULL;
+
 void show_list(s16b o_list_ptr, bool store)
 {
 	int i, j;
@@ -1940,6 +1946,9 @@ void show_list(s16b o_list_ptr, bool store)
 		col = (wid - len - 1) / 2;
 		lim = col + len - extra;
 	}
+
+	/* RVIP: the inventory screen draws its cursor left of this */
+	show_list_col = col;
 
 	/* Output each entry */
 	for (j = 0; j <= k; j++)
@@ -2098,6 +2107,9 @@ void show_equip(bool store)
 		col = (wid - len - 1) / 2;
 		lim = col + len - extra;
 	}
+
+	/* RVIP: the inventory screen draws its cursor left of this */
+	show_list_col = col;
 
 	/* Output each entry */
 	for (j = 0; j < k; j++)
@@ -2864,6 +2876,23 @@ object_type *get_item(cptr pmt, cptr str, int mode)
 	else if (allow_floor)
 	{
 		command_wrk = (USE_FLOOR);
+	}
+
+	/* RVIP: the item chosen in the inventory screen, if this command takes it */
+	if (get_item_preselect)
+	{
+		o_ptr = get_item_preselect;
+		get_item_preselect = NULL;
+		i = ((o_ptr >= p_ptr->equipment) && (o_ptr < p_ptr->equipment + EQUIP_MAX)) ?
+			USE_EQUIP : USE_INVEN;
+
+		if ((mode & i) && item_tester_okay(o_ptr))
+		{
+			item_tester_tval = 0;
+			item_tester_hook = NULL;
+			save_object_choice(o_ptr, i);
+			return (o_ptr);
+		}
 	}
 
 	/* Get the saved item index */

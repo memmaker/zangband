@@ -3251,6 +3251,254 @@ bool is_a_vowel(int ch)
 }
 
 
+/*** RVIP: boxed menus and the command menu on Enter ***/
+
+/* The next command came from a menu: it is an underlying command (no keymap) */
+static bool command_raw = FALSE;
+
+/* Run an underlying command next, whatever the keyset */
+void queue_raw_command(char cmd)
+{
+	p_ptr->cmd.new = cmd;
+	command_raw = TRUE;
+}
+
+/* The key that gives underlying command cmd in the current keyset, or 0 */
+char command_key(char cmd)
+{
+	int mode = rogue_like_commands ? KEYMAP_MODE_ROGUE : KEYMAP_MODE_ORIG;
+	int k;
+
+	if (!keymap_act[mode][(byte)cmd]) return (cmd);
+
+	for (k = 1; k < 256; k++)
+	{
+		cptr act = keymap_act[mode][k];
+
+		if (act && (act[0] == cmd) && !act[1]) return ((char)k);
+	}
+
+	return (0);
+}
+
+/* The same as text: "q", "^D", or "" */
+cptr command_key_str(char cmd)
+{
+	static char buf[3];
+	char k = command_key(cmd);
+
+	buf[0] = buf[1] = buf[2] = '\0';
+	if (!k) return (buf);
+	if ((byte)k < 32) { buf[0] = '^'; buf[1] = k + 64; }
+	else buf[0] = k;
+	return (buf);
+}
+
+static void box_str(int x, int y, byte a, cptr s)
+{
+	while (*s) Term_putch(x++, y, a, *s++);
+}
+
+/*
+ * Draw a boxed menu at (x, y), exactly as big as its content (moved
+ * left/up to fit the screen).  Returns the row of the first entry.
+ */
+static int box_draw(int *px, int *py, cptr title, int n, cptr *text, int cur)
+{
+	int wid, hgt, w = title ? strlen(title) : 0, h, i, x = *px, y = *py, top;
+	char line[256];
+
+	Term_get_size(&wid, &hgt);
+
+	for (i = 0; i < n; i++) w = MAX(w, (int)strlen(text[i]) + 3);
+	if (title) w = MAX(w, (int)strlen(title) + 1);
+	w = MIN(w, MIN(wid - 2, 250));
+	h = n + (title ? 1 : 0);
+
+	/* ponytail: no scrolling, every menu here is shorter than the screen */
+	if (x + w + 2 > wid) x = MAX(wid - w - 2, 0);
+	if (y + h + 2 > hgt) y = MAX(hgt - h - 2, 0);
+	top = y + 1 + (title ? 1 : 0);
+
+	for (i = 0; i < w; i++) line[i] = '-';
+	line[w] = '\0';
+	Term_putch(x, y, TERM_WHITE, '+');
+	box_str(x + 1, y, TERM_WHITE, line);
+	Term_putch(x + w + 1, y, TERM_WHITE, '+');
+	Term_putch(x, y + h + 1, TERM_WHITE, '+');
+	box_str(x + 1, y + h + 1, TERM_WHITE, line);
+	Term_putch(x + w + 1, y + h + 1, TERM_WHITE, '+');
+	for (i = 1; i <= h; i++)
+	{
+		Term_putch(x, y + i, TERM_WHITE, '|');
+		Term_erase(x + 1, y + i, w);
+		Term_putch(x + w + 1, y + i, TERM_WHITE, '|');
+	}
+
+	if (title) box_str(x + 1, y + 1, TERM_YELLOW, title);
+
+	for (i = 0; i < n; i++)
+	{
+		strnfmt(line, w + 1, "%s%s", (i == cur) ? "> " : "  ", text[i]);
+		box_str(x + 1, top + i, (i == cur) ? TERM_L_BLUE : TERM_WHITE, line);
+	}
+
+	*px = x + w + 2;
+	*py = y;
+	return (top);
+}
+
+/*
+ * A boxed menu (see box_draw()).  keys[i] (0 = none) chooses entry i
+ * directly.  2/8 (arrows) move, Enter/Space/5/6 choose, Escape/0/4 go back.
+ * Returns the chosen entry or -1.
+ */
+int box_menu(int x, int y, cptr title, int n, cptr *text, const char *keys, int cur)
+{
+	int i, top, bx, by;
+	char k;
+
+	if (n <= 0) return (-1);
+	if ((cur < 0) || (cur >= n)) cur = 0;
+
+	screen_save();
+
+	while (1)
+	{
+		bx = x;
+		by = y;
+		top = box_draw(&bx, &by, title, n, text, cur);
+
+		k = inkey();
+
+		for (i = 0; i < n; i++)
+			if (keys && keys[i] && (k == keys[i])) break;
+		if (i < n) { cur = i; break; }
+
+		if ((k == ESCAPE) || (k == '0') || (k == '4')) { cur = -1; break; }
+		if ((k == '\r') || (k == '\n') || (k == ' ') || (k == '5') || (k == '6')) break;
+		if (k == '8') cur = (cur + n - 1) % n;
+		if (k == '2') cur = (cur + 1) % n;
+	}
+
+	screen_load();
+
+	return (cur);
+}
+
+/* The commands, grouped as lib/help/commdesc.txt does; cmd 0 starts a group */
+static const struct { char cmd; cptr name; } cmd_menu_list[] =
+{
+	{ 0, "Inventory" },
+	{ 'i', "Inventory list" }, { 'e', "Equipment list" },
+	{ 'd', "Drop an item" }, { 'k', "Destroy an item" },
+	{ 'w', "Wear/wield equipment" }, { 't', "Take off equipment" },
+	{ 0, "Movement" },
+	{ ';', "Walk (with pickup)" }, { '-', "Walk (flip pickup)" },
+	{ '.', "Run" }, { '<', "Go up staircase" }, { '>', "Go down staircase" },
+	{ 'H', "Auto-explore" },
+	{ 0, "Resting" },
+	{ ',', "Stay still (with pickup)" }, { 'g', "Stay still (flip pickup)" },
+	{ 'R', "Rest for a period" },
+	{ 0, "Searching" },
+	{ 's', "Search for traps/doors" }, { 'S', "Toggle search mode" },
+	{ 0, "Doors and walls" },
+	{ 'T', "Dig a tunnel" }, { 'o', "Open a door or chest" },
+	{ 'c', "Close a door" }, { 'j', "Jam a door" },
+	{ 'D', "Disarm a trap or chest" }, { '+', "Alter grid" },
+	{ 0, "Spells and powers" },
+	{ 'b', "Browse a book" }, { 'G', "Gain new spells/prayers" },
+	{ 'm', "Cast a spell / use mental power" }, { 'U', "Use bonus power" },
+	{ 0, "Objects" },
+	{ 'E', "Eat some food" }, { 'F', "Fuel your lantern/torch" },
+	{ 'q', "Quaff a potion" }, { 'r', "Read a scroll" },
+	{ '{', "Inscribe an object" }, { '}', "Uninscribe an object" },
+	{ 0, "Magical objects" },
+	{ 'A', "Activate an artifact" }, { 'a', "Aim a wand" },
+	{ 'u', "Use a staff" }, { 'z', "Zap a rod" },
+	{ 0, "Throwing and firing" },
+	{ 'f', "Fire an item" }, { 'v', "Throw an item" },
+	{ '*', "Target monster or location" },
+	{ 0, "Looking" },
+	{ 'M', "Full dungeon map" }, { 'L', "Locate player on map" },
+	{ 'l', "Look around" }, { 'I', "Observe an item" },
+	{ 0, "Messages and notes" },
+	{ KTRL('F'), "Repeat level feeling" }, { KTRL('P'), "Show previous messages" },
+	{ ':', "Take notes" },
+	{ 0, "Game status" },
+	{ 'C', "Character description" },
+	{ '~', "Check various information" }, { KTRL('Q'), "Quest status" },
+	{ KTRL('T'), "Show the day and time" },
+	{ 0, "Saving and exiting" },
+	{ KTRL('S'), "Save and don't quit" }, { KTRL('X'), "Save and quit" },
+	{ 'Q', "Quit (commit suicide)" },
+	{ 0, "Options and settings" },
+	{ '=', "Set options" }, { '!', "User interface" },
+	{ '@', "Interact with macros" }, { '%', "Interact with visuals" },
+	{ '&', "Interact with colors" }, { '"', "Enter a user pref command" },
+	{ 0, "Help" },
+	{ '?', "Help" }, { '/', "Identify symbol" }, { 'V', "Version info" },
+	{ 0, "Other" },
+	{ 'n', "Repeat last command" }, { 'p', "Command your pets" },
+	{ KTRL('R'), "Redraw the screen" },
+	{ '(', "Load screen dump" }, { ')', "Dump screen dump" },
+};
+
+#define CMD_MENU_N	((int)(sizeof(cmd_menu_list) / sizeof(cmd_menu_list[0])))
+
+/*
+ * The command menu: groups, then the group's commands with their keys in
+ * the current keyset.  Returns an underlying command or 0.
+ */
+static char cmd_menu(void)
+{
+	static int group = 0;
+	cptr gtext[32], ctext[16];
+	char gkeys[32], ckeys[16], cmds[16];
+	char gbuf[32][40], cbuf[16][60];
+	int gstart[32], ng = 0, i, j, n, bx, by;
+
+	for (i = 0; i < CMD_MENU_N; i++)
+	{
+		if (cmd_menu_list[i].cmd) continue;
+		gstart[ng] = i + 1;
+		strnfmt(gbuf[ng], sizeof(gbuf[ng]), "%c) %s", I2A(ng), cmd_menu_list[i].name);
+		gtext[ng] = gbuf[ng];
+		gkeys[ng] = I2A(ng);
+		ng++;
+	}
+
+	while (1)
+	{
+		int nw = 0;
+
+		group = box_menu(1, 1, "Commands", ng, gtext, gkeys, group);
+		if (group < 0) { group = 0; return (0); }
+
+		for (n = 0, i = gstart[group]; (i < CMD_MENU_N) && cmd_menu_list[i].cmd; i++, n++)
+			nw = MAX(nw, (int)strlen(cmd_menu_list[i].name));
+
+		for (j = 0, i = gstart[group]; j < n; i++, j++)
+		{
+			cmds[j] = cmd_menu_list[i].cmd;
+			ckeys[j] = command_key(cmds[j]);
+			strnfmt(cbuf[j], sizeof(cbuf[j]), "%-*s  %s", nw, cmd_menu_list[i].name,
+				command_key_str(cmds[j]));
+			ctext[j] = cbuf[j];
+		}
+
+		/* The group box stays under the command box */
+		screen_save();
+		bx = 1;
+		by = 1;
+		(void)box_draw(&bx, &by, "Commands", ng, gtext, group);
+		i = box_menu(bx, by + 1 + group, cmd_menu_list[gstart[group] - 1].name, n, ctext, ckeys, 0);
+		screen_load();
+		if (i >= 0) return (cmds[i]);
+	}
+}
+
+
 /*
  * Hack -- special buffer to hold the action of the current keymap
  */
@@ -3287,6 +3535,8 @@ void request_command(int shopping)
 
 	cptr act;
 
+	bool raw = FALSE;
+
 
 	/* Roguelike */
 	if (rogue_like_commands)
@@ -3314,6 +3564,8 @@ void request_command(int shopping)
 	/* Get command */
 	while (1)
 	{
+		raw = FALSE;
+
 		/* Hack -- auto-commands */
 		if (p_ptr->cmd.new)
 		{
@@ -3325,6 +3577,10 @@ void request_command(int shopping)
 
 			/* Forget it */
 			p_ptr->cmd.new = 0;
+
+			/* RVIP: a command from a menu skips the keymaps */
+			raw = command_raw;
+			command_raw = FALSE;
 		}
 
 		/* Get a keypress in "command" mode */
@@ -3341,6 +3597,14 @@ void request_command(int shopping)
 
 			/* Get a command */
 			cmd = inkey();
+
+			/* RVIP: Enter opens the command menu (unless a keymap uses it) */
+			if (!shopping && ((cmd == '\r') || (cmd == '\n')) &&
+				!keymap_act[mode][(byte)cmd])
+			{
+				cmd = cmd_menu();
+				raw = TRUE;
+			}
 		}
 
 		/* Clear top line */
@@ -3464,7 +3728,7 @@ void request_command(int shopping)
 		act = keymap_act[mode][(byte)(cmd)];
 
 		/* Apply keymap if not inside a keymap already */
-		if (act && !inkey_next)
+		if (act && !inkey_next && !raw)
 		{
 			/* Install the keymap (limited buffer size) */
 			(void)strnfmt(request_command_buffer, 256, "%s", act);

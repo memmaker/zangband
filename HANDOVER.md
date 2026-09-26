@@ -140,3 +140,73 @@
   `show_obj_list()` (`obj-ui.c`), reopen hook in `cmd0.c`. Zangband has its
   own `menu_type` / `display_menu()` in `ui.c` (used by `do_cmd_options`,
   macro menus) — check it before porting.
+
+### Stage 3 (Enter menu + inventory): done 2026-09-26
+- **Enter menu**: `cmd_menu()` in `src/util.c` (TinyAngband's
+  `inkey_from_menu()` idea, groups and commands in `cmd_menu_list[]` as
+  `lib/help/commdesc.txt` groups them, incl. `H` explore and `<`/`>`).
+  Opened in `request_command()` right after `inkey()` when the key is
+  `'\r'`/`'\n'` and `!keymap_act[mode][key]` (so `C:0:^J` → `\r` also
+  opens it; roguelike `^J` stays tunnel south). Two boxes: groups (a–p),
+  then the group's commands with the key of the current keyset
+  (`command_key()` reverse-looks-up `keymap_act`, e.g. roguelike `T`, `Z`,
+  `^D`; explore has none in roguelike). 2/8/arrows move, Enter/Space/5/6
+  choose, the letter/key chooses, Esc/0/4 back. The chosen *underlying*
+  command skips the keymaps (`raw` flag in `request_command()`), so it runs
+  through `process_command()` in both keysets.
+- Boxes: `box_draw()` / `box_menu()` in `util.c`, sized to content (moved
+  to fit the screen, no scrolling). Zangband's own `display_menu()` (`ui.c`)
+  was not used: full-screen, no box, cursor only in scroll mode.
+- **Item menus**: `inven_screen()` at the end of `src/cmd3.c` (Quickband's
+  `textui_inven_screen()` ported); `do_cmd_inven()`/`do_cmd_equip()` call
+  it. Cursor `>` left of the list (`show_list_col`, set by `show_list()` /
+  `show_equip()` in `object1.c`). Letter = main action, Shift = drop,
+  Ctrl = examine, Enter/Space/5 = `inv_action_menu()` (box over the item
+  line), `+ - *` = main/drop/examine, 4/6 or `/` = other list, Esc/0/. close,
+  any other key = normal command (as before).
+- **How item actions run (key queue + preselect)**: `inv_act[]` holds
+  each action's underlying key, name and the same item test and places
+  as that command's `get_item()` call (tval, hook, USE_INVEN/EQUIP).
+  Running one sets `get_item_preselect = o_ptr` and
+  `queue_raw_command(key)` (`p_ptr->cmd.new`, no keymap); the command runs
+  through `process_command()` and its `get_item()` (`object1.c`) returns the
+  preselected item if the mode and tester accept it (else prompts as usual;
+  `save_object_choice()` keeps `n` repeat working). `dungeon.c`: clears
+  the preselect after a command unless a queued one is pending; `inven_reopen`
+  queues `i`/`e` again before the next command unless a non-pet monster is
+  in view (`inven_may_reopen()`). `item_tester_hook_activate` in `cmd6.c`
+  is no longer static.
+- No mouse: the page queues clicks but `web_pump()` drops them ("No mouse
+  support in this variant"), so no click selection.
+- Web: `sound.cfg` is now in the preload (`/zangband/lib/xtra/sound/`),
+  read lazily by `loadSoundCfg()` in `zangband.js` (a fetched `.cfg` was a
+  download prompt in the pane).
+- Tested in the browser (own tab): Enter menu lists all 16 groups, pick by
+  cursor (Game status → time) and by key (`H`), Esc closes, `^J` opens it;
+  item menus on real items: read (Rumour), quaff (CLW, letter), eat (ale,
+  menu and letter), wield (dagger, letter), wear (gloves, menu key `w`),
+  take off (menu Enter; roguelike `T`), drop (Shift), examine (menu `I`),
+  Fire shown only with a bow wielded; list reopens after each action.
+  Roguelike keyset (`"Y:rogue_like_commands`): menu shows roguelike keys,
+  explore runs from the menu.
+- ASan (native `-DUSE_GCU`, pty, random keys weighted to Enter, `i`/`e`,
+  letters, Shift/Ctrl letters, 2/4/6/8, `H`, `<`/`>`; 4 seeds x (3000 new +
+  2000–2500 restored/new after death)): menus and item actions exercised
+  (menus drawn 14–28 times per run), no reports. Driver lesson: ^Y is
+  DSUSP on macOS (game stopped); SIGTERM at the end deadlocks in `quit()`
+  → `endwin()` from the signal handler (upstream), use SIGKILL.
+- Open problems: the reopened list hides the action's message line (it is
+  in the message window and `^P`); Tab/^H act as Ctrl+letter examine in
+  the list; the item menu box can cover the right part of the list.
+
+### Next: stage 4 (tiles)
+- Decision from stage 1: **Shockbolt** (own `graf-new.prf` + 16x16 set
+  covers only 91.4% of r/k/f/t_info, `python3 web/tile-coverage.py`).
+- Template tile loading (RVIP A4): TinyAngband `src/main-web.c`
+  `init_web()` sets `use_graphics`, `arg_graphics`, `use_transparency`,
+  bigtile and `ANGBAND_GRAF = "new"` (→ `graf-new.prf`); its
+  `web/bmp2png.py` turns `16x16.bmp` into the page's PNG and
+  `tinyangband.js` draws `js_pict` cells from it (no `web/tiles` folder).
+  Shockbolt worked example on the web: `~/Games/tactical-angband`
+  (HANDOVER "Tiles": 64x64 Shockbolt Dark drawn at 32 px); FrogComposband
+  took the same decision.

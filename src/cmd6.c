@@ -866,7 +866,7 @@ void do_cmd_zap_rod(void)
 /*
  * Hook to determine if an object is activatable
  */
-static bool item_tester_hook_activate(const object_type *o_ptr)
+bool item_tester_hook_activate(const object_type *o_ptr)
 {
 	/* Check statues */
 	if (o_ptr->tval == TV_STATUE) return (TRUE);

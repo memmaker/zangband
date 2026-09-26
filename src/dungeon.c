@@ -2771,11 +2771,23 @@ static void process_player(void)
 			/* Place the cursor on the player */
 			move_cursor_relative(p_ptr->px, p_ptr->py);
 
+			/* RVIP: show the list again after an item action */
+			if (inven_reopen && !p_ptr->cmd.new)
+			{
+				int w = inven_reopen;
+
+				inven_reopen = 0;
+				if (inven_may_reopen()) queue_raw_command((w == 2) ? 'e' : 'i');
+			}
+
 			/* Get a command (normal) */
 			request_command(FALSE);
 
 			/* Process the command */
 			process_command();
+
+			/* RVIP: an item chosen in the inventory screen is for the queued command only */
+			if (!p_ptr->cmd.new) get_item_preselect = NULL;
 		}
 
 

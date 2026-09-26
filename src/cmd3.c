@@ -14,41 +14,14 @@
 
 
 
+static void inven_screen(bool equip);
+
 /*
- * Display inventory
+ * Display inventory (RVIP: with a cursor and item menus, see inven_screen())
  */
 void do_cmd_inven(void)
 {
-	/* Save screen */
-	screen_save();
-
-	/* Hack -- show empty slots */
-	item_tester_full = TRUE;
-
-	/* Display the inventory */
-	show_list(p_ptr->inventory, FALSE);
-
-	/* Hack -- hide empty slots */
-	item_tester_full = FALSE;
-
-	/* Get a command */
-	prtf(0, 0, "Inventory: carrying %d.%d pounds (%d%% of capacity). Command: ",
-			p_ptr->total_weight / 10, p_ptr->total_weight % 10,
-			(p_ptr->total_weight * 100) /
-			((adj_str_wgt[p_ptr->stat[A_STR].ind] * 100) / 2));
-
-	/* Get a new command */
-	p_ptr->cmd.new = inkey();
-
-	/* Load screen */
-	screen_load();
-
-	/* Process "Escape" */
-	if (p_ptr->cmd.new == ESCAPE)
-	{
-		/* Reset stuff */
-		p_ptr->cmd.new = 0;
-	}
+	inven_screen(FALSE);
 }
 
 
@@ -57,36 +30,7 @@ void do_cmd_inven(void)
  */
 void do_cmd_equip(void)
 {
-	/* Save the screen */
-	screen_save();
-
-	/* Hack -- show empty slots */
-	item_tester_full = TRUE;
-
-	/* Display the equipment */
-	show_equip(FALSE);
-
-	/* Hack -- undo the hack above */
-	item_tester_full = FALSE;
-
-	/* Get a command */
-	prtf(0, 0, "Equipment: carrying %d.%d pounds (%d%% of capacity). Command: ",
-			p_ptr->total_weight / 10, p_ptr->total_weight % 10,
-			(p_ptr->total_weight * 100) /
-			((adj_str_wgt[p_ptr->stat[A_STR].ind] * 100) / 2));
-
-	/* Get a new command */
-	p_ptr->cmd.new = inkey();
-
-	/* Restore the screen */
-	screen_load();
-
-	/* Process "Escape" */
-	if (p_ptr->cmd.new == ESCAPE)
-	{
-		/* Reset stuff */
-		p_ptr->cmd.new = 0;
-	}
+	inven_screen(TRUE);
 }
 
 
@@ -1639,4 +1583,301 @@ bool research_mon(void)
 	screen_load();
 
 	return (picked && cost_gold);
+}
+
+
+/*** RVIP: inventory and equipment screens with item menus ***/
+
+/*
+ * The list gets a cursor.  A letter runs the item's main action, Shift+letter
+ * drops it, Ctrl+letter examines it.  Enter / Space / 5 opens a menu of all
+ * the actions that fit the item.  An action runs the game's own command
+ * (queue_raw_command(), so it goes through process_command()) with the item
+ * handed to its get_item() by get_item_preselect.  Afterwards the list comes
+ * back (inven_reopen, dungeon.c) unless a monster is in view.
+ */
+
+/* 1 = show the inventory again before the next command, 2 = equipment */
+int inven_reopen = 0;
+
+/* Refuel: the fuel that fits the light being worn */
+static bool item_tester_refill_any(const object_type *o_ptr)
+{
+	object_type *j_ptr = &p_ptr->equipment[EQUIP_LITE];
+
+	if (j_ptr->tval != TV_LITE) return (FALSE);
+	if (j_ptr->sval == SV_LITE_LANTERN) return (item_tester_refill_lantern(o_ptr));
+	if (j_ptr->sval == SV_LITE_TORCH) return (item_tester_refill_torch(o_ptr));
+	return (FALSE);
+}
+
+/*
+ * Item actions: underlying command, name, and the item test and places of
+ * that command's get_item() call.  The first one that fits is the main
+ * action.  tval 1 = the player's spell books, 2 = the player's ammo.
+ */
+static const struct
+{
+	char cmd;
+	cptr name;
+	byte tval;
+	bool (*hook)(const object_type *o_ptr);
+	int mode;
+} inv_act[] =
+{
+	{ 'E', "Eat", TV_FOOD, NULL, USE_INVEN },
+	{ 'q', "Quaff", TV_POTION, NULL, USE_INVEN },
+	{ 'r', "Read", TV_SCROLL, NULL, USE_INVEN },
+	{ 'u', "Use staff", TV_STAFF, NULL, USE_INVEN },
+	{ 'a', "Aim wand", TV_WAND, NULL, USE_INVEN },
+	{ 'z', "Zap rod", TV_ROD, NULL, USE_INVEN },
+	{ 'm', "Cast from it", 1, NULL, USE_INVEN },
+	{ 'w', "Wear / wield", 0, item_tester_hook_wear, USE_INVEN },
+	{ 't', "Take off", 0, NULL, USE_EQUIP },
+	{ 'F', "Refuel with it", 0, item_tester_refill_any, USE_INVEN },
+	{ 'A', "Activate", 0, item_tester_hook_activate, USE_EQUIP },
+	{ 'f', "Fire", 2, NULL, USE_INVEN },
+	{ 'b', "Browse", 0, item_tester_hook_is_book, USE_INVEN },
+	{ 'G', "Study", 1, NULL, USE_INVEN },
+	{ 'I', "Examine", 0, NULL, USE_INVEN | USE_EQUIP },
+	{ 'v', "Throw", 0, NULL, USE_INVEN | USE_EQUIP },
+	{ 'd', "Drop", 0, NULL, USE_INVEN | USE_EQUIP },
+	{ 'k', "Destroy", 0, NULL, USE_INVEN },
+	{ '{', "Inscribe", 0, NULL, USE_INVEN | USE_EQUIP },
+	{ '}', "Uninscribe", 0, item_tester_inscribed, USE_INVEN | USE_EQUIP },
+};
+
+#define INV_ACT_N	((int)(sizeof(inv_act) / sizeof(inv_act[0])))
+#define INV_EXAMINE	14	/* inv_act[] index */
+#define INV_DROP	16
+
+static bool inv_act_ok(int act, object_type *o_ptr, bool equip)
+{
+	bool ok;
+
+	if (!o_ptr || !o_ptr->k_idx) return (FALSE);
+	if (!(inv_act[act].mode & (equip ? USE_EQUIP : USE_INVEN))) return (FALSE);
+
+	/* Same test as the command's get_item() */
+	item_tester_tval = inv_act[act].tval;
+	if (inv_act[act].tval == 1) item_tester_tval = mp_ptr->spell_book;
+	if (inv_act[act].tval == 2) item_tester_tval = p_ptr->ammo_tval;
+	if ((inv_act[act].tval == 1 || inv_act[act].tval == 2) && !item_tester_tval)
+		return (FALSE);
+	item_tester_hook = inv_act[act].hook;
+	ok = item_tester_okay(o_ptr);
+	item_tester_tval = 0;
+	item_tester_hook = NULL;
+	return (ok);
+}
+
+static int inv_main_act(object_type *o_ptr, bool equip)
+{
+	int i;
+
+	for (i = 0; i < INV_ACT_N; i++)
+		if (inv_act_ok(i, o_ptr, equip)) return (i);
+
+	return (-1);
+}
+
+/* Item number n of the list, or NULL */
+static object_type *inv_item(bool equip, int n)
+{
+	if (n < 0) return (NULL);
+	if (equip)
+		return ((n < EQUIP_MAX) && p_ptr->equipment[n].k_idx ?
+				&p_ptr->equipment[n] : NULL);
+	return (get_list_item(p_ptr->inventory, n));
+}
+
+/* Number of rows of the list */
+static int inv_rows(bool equip)
+{
+	int n = 0;
+
+	if (equip) return (EQUIP_MAX);
+	while (inv_item(FALSE, n)) n++;
+	return (n);
+}
+
+/* Next used row from n in steps of d (wrapping), or -1 */
+static int inv_step(bool equip, int n, int d)
+{
+	int rows = inv_rows(equip), i;
+
+	for (i = 0; i < rows; i++)
+	{
+		n = (n + d + rows) % rows;
+		if (inv_item(equip, n)) return (n);
+	}
+	return (-1);
+}
+
+/* Show the list again only when nothing is watching the player */
+bool inven_may_reopen(void)
+{
+	int i;
+
+	if (p_ptr->state.is_dead || p_ptr->state.leaving) return (FALSE);
+
+	for (i = 1; i < m_max; i++)
+	{
+		monster_type *m_ptr = &m_list[i];
+
+		if (!m_ptr->r_idx || !m_ptr->ml) continue;
+		if (is_pet(m_ptr)) continue;
+		if (player_has_los_grid(parea(m_ptr->fx, m_ptr->fy))) return (FALSE);
+	}
+
+	return (TRUE);
+}
+
+/* Menu of the actions that fit the item; returns an inv_act[] index or -1 */
+static int inv_action_menu(object_type *o_ptr, bool equip, int row)
+{
+	int acts[INV_ACT_N], n = 0, i, nw = 0;
+	cptr text[INV_ACT_N];
+	char keys[INV_ACT_N], buf[INV_ACT_N][40], o_name[60];
+
+	for (i = 0; i < INV_ACT_N; i++)
+		if (inv_act_ok(i, o_ptr, equip))
+		{
+			acts[n++] = i;
+			nw = MAX(nw, (int)strlen(inv_act[i].name));
+		}
+
+	for (i = 0; i < n; i++)
+	{
+		keys[i] = command_key(inv_act[acts[i]].cmd);
+		strnfmt(buf[i], sizeof(buf[i]), "%-*s  %s", nw, inv_act[acts[i]].name,
+				command_key_str(inv_act[acts[i]].cmd));
+		text[i] = buf[i];
+	}
+
+	object_desc(o_name, o_ptr, TRUE, 3, sizeof(o_name));
+
+	/* Over the item's own line, letters and cursor stay visible */
+	i = box_menu(show_list_col + 3, row, o_name, n, text, keys, 0);
+	return ((i < 0) ? -1 : acts[i]);
+}
+
+static void inven_screen(bool equip)
+{
+	int cursor = -1;
+
+	inven_reopen = 0;
+
+	screen_save();
+
+	while (1)
+	{
+		object_type *o_ptr = NULL;
+		int act = -1, rows, n;
+		char key;
+
+		/* Keep the cursor on an item */
+		if (!inv_item(equip, cursor)) cursor = inv_step(equip, -1, 1);
+		rows = inv_rows(equip);
+
+		/* Draw the list with the cursor */
+		screen_load();
+		screen_save();
+		item_tester_full = TRUE;
+		if (equip) show_equip(FALSE);
+		else show_list(p_ptr->inventory, FALSE);
+		item_tester_full = FALSE;
+
+		if (cursor >= 0)
+			Term_putch(MAX(show_list_col - 1, 0), cursor + 1, TERM_L_BLUE, '>');
+
+		if (rows < 21)
+		{
+			prtf(MAX(show_list_col - 2, 0), rows + 1, CLR_L_UMBER
+				 " 8/2, Enter: actions  a-z: %s  A-Z: drop  ^a-z: examine",
+				 equip ? "take off" : "use");
+			prtf(MAX(show_list_col - 2, 0), rows + 2, CLR_L_UMBER
+				 " 4/6: %s  Esc: close  other keys: commands",
+				 equip ? "inventory" : "equipment");
+		}
+
+		prtf(0, 0, "%s: carrying %d.%d pounds (%d%% of capacity). Command: ",
+			 equip ? "Equipment" : "Inventory",
+			 p_ptr->total_weight / 10, p_ptr->total_weight % 10,
+			 (p_ptr->total_weight * 100) /
+			 ((adj_str_wgt[p_ptr->stat[A_STR].ind] * 100) / 2));
+
+		key = inkey();
+
+		if ((key == ESCAPE) || (key == '0') || (key == '.')) break;
+
+		if ((key == '/') || (key == '4') || (key == '6'))
+		{
+			equip = !equip;
+			cursor = -1;
+			continue;
+		}
+		if ((key == '8') || (key == '2'))
+		{
+			if (cursor >= 0) cursor = inv_step(equip, cursor, (key == '8') ? -1 : 1);
+			continue;
+		}
+
+		/* Enter / Space / 5: menu of all actions for the cursor item */
+		if ((key == '\r') || (key == '\n') || (key == ' ') || (key == '5'))
+		{
+			o_ptr = inv_item(equip, cursor);
+			if (!o_ptr) continue;
+			act = inv_action_menu(o_ptr, equip, cursor + 1);
+			if (act < 0) continue;
+		}
+
+		/* Number pad: + main action, - drop, * examine (cursor item) */
+		else if ((key == '+') || (key == '-') || (key == '*'))
+		{
+			o_ptr = inv_item(equip, cursor);
+			if (o_ptr)
+				act = (key == '+') ? inv_main_act(o_ptr, equip) :
+					  (key == '-') ? INV_DROP : INV_EXAMINE;
+		}
+
+		/* letter: main action, Shift+letter: drop, Ctrl+letter: examine */
+		else if ((key >= 'a') && (key <= 'z'))
+		{
+			o_ptr = inv_item(equip, key - 'a');
+			if (o_ptr) act = inv_main_act(o_ptr, equip);
+		}
+		else if ((key >= 'A') && (key <= 'Z'))
+		{
+			o_ptr = inv_item(equip, key - 'A');
+			if (o_ptr) act = INV_DROP;
+		}
+		else if ((key >= 1) && (key <= 26))
+		{
+			o_ptr = inv_item(equip, key - 1);
+			if (o_ptr) act = INV_EXAMINE;
+		}
+
+		/* Anything else is a normal command, as in the old screen */
+		else
+		{
+			p_ptr->cmd.new = key;
+			break;
+		}
+
+		if (act < 0)
+		{
+			bell("Illegal object choice!");
+			continue;
+		}
+
+		/* Run the game's own command on this item */
+		screen_load();
+		get_item_preselect = o_ptr;
+		queue_raw_command(inv_act[act].cmd);
+		inven_reopen = equip ? 2 : 1;
+		return;
+	}
+
+	screen_load();
 }

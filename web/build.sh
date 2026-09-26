@@ -21,6 +21,7 @@ done
 for d in edit file help pref; do cp -R lib/$d web/stage/lib/; done
 mkdir -p web/stage/lib/script && cp lib/script/*.lua web/stage/lib/script/
 mkdir -p web/stage/lib/data web/stage/lib/info web/stage/lib/save web/stage/lib/user web/stage/lib/apex web/stage/lib/bone
+mkdir -p web/stage/lib/xtra/sound && cp lib/xtra/sound/sound.cfg web/stage/lib/xtra/sound/
 find web/stage -name 'makefile*' -delete
 
 # Sources: LUAWOBJS/ANGOBJS/ZUTILOBJS/BORGOBJS/LUAOBJS of makefile.std, no main-*/maid-x11
@@ -39,8 +40,7 @@ emcc -O2 -fcommon -std=gnu99 -DUSE_WEB -Isrc -w \
 	--preload-file web/stage/lib@/zangband/lib
 
 cp web/index.html "$HOME/Games/rvip-tools/web/rvip-wm.js" web/zangband.js "$OUT/"
-# Sound effects and town music are stage 6; the page fetches sound.cfg
-mkdir -p "$OUT/sound" && cp lib/xtra/sound/sound.cfg "$OUT/sound/"
+# Sound effects and town music are stage 6; sound.cfg is in the preload
 mkdir -p "$OUT/music" && cp ../quickband/web/music/new_town.ogg "$OUT/music/"
 rm -rf web/stage
 ls -la "$OUT"
