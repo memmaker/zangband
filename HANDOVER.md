@@ -275,7 +275,7 @@
   `user-x11.prf`/`init_web()` default) to match `TERMS` in `web/zangband.js`
   (main, Inventory, Messages, Visible, Recall, Equipment) and the window
   list in `web/index.html`.
-- Layout file: `/zangband/lib/user/layout.json`-style `LAYOUT_FILE` in
+- Layout file: `LAYOUT_FILE` = `/zangband/lib/user/web-layout.json` in
   `zangband.js` (now also holds `text` for the Tiles button).
 - `web/deploy.sh`: copy from `~/Games/tinyangband/web/deploy.sh` (or
   tactical-angband), target `ruzzoli.de/roguelikes/zangband/`, with the
