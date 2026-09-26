@@ -132,6 +132,40 @@ EM_JS(void, js_sync, (void), {
 });
 
 
+/* Run report (roguelikes-index/server/CONTRACT.md) through RvipWM's outbox;
+   never throws, offline it waits in the outbox. Negative ints are omitted. */
+EM_JS(void, js_beacon, (const char *g, const char *ev, const char *name, const char *killer, int depth, int score, int turns, int lvl), {
+	try {
+		var p = [['g', UTF8ToString(g)], ['ev', UTF8ToString(ev)], ['name', name ? UTF8ToString(name) : ''],
+		         ['killer', killer ? UTF8ToString(killer) : ''], ['depth', depth], ['score', score], ['turns', turns], ['lvl', lvl]];
+		var q = p.filter(function (a) { return a[1] !== '' && !(a[1] < 0); })
+		         .map(function (a) { return a[0] + '=' + encodeURIComponent(a[1]); }).join('&');
+		if (window.RvipWM && RvipWM.report) RvipWM.report(q); else fetch('/roguelikes/beacon?' + q, { keepalive: true, mode: 'no-cors' }).catch(function () {});
+	} catch (e) {}
+});
+
+/* Called from close_game() (scores.c) when the run is over, before the
+   tombstone; suicide and signals also die ("Quitting", "Interrupting"). */
+void web_run_end(long score)
+{
+	cptr k = p_ptr->state.died_from, ev = "death";
+	static char b[80];
+
+	if (p_ptr->state.total_winner) ev = "win", k = NULL;
+	else if (streq(k, "Quitting") || streq(k, "Interrupting") || streq(k, "Abortion")) ev = "quit", k = NULL;
+	else if (prefix(k, "a ")) k += 2;
+	else if (prefix(k, "an ")) k += 3;
+	else if (prefix(k, "the ") || prefix(k, "The ")) k += 4;
+	if (k && suffix(k, "(?)"))	/* hallucinating: effects.c take_hit() */
+	{
+		strnfmt(b, sizeof b, "%s", k);
+		b[strlen(b) - 3] = 0;
+		k = b;
+	}
+	js_beacon("zangband", ev, player_name, k, p_ptr->depth, (int)score, (int)turn, p_ptr->lev);
+}
+
+
 /* Persist the save directories (called after every save) */
 void web_sync_files(void)
 {

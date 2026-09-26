@@ -435,4 +435,28 @@
   zangband.org itself is now a spam domain), forum.angband.live.
 - Borg (`^Z`) compiled in, still untested in the browser.
 
-### Next: stage 9 (graveyard + leaderboard)
+### Stage 9 (graveyard + leaderboard): done 2026-09-26
+- Hook: `scores.c` `close_game()`, first thing in the `is_dead` branch
+  (before tombstone/kingly, which overwrite `died_from` with "Ripe Old Age"
+  on a win) → `web_run_end(total_points())` (`#ifdef USE_WEB`) →
+  `main-web.c` `js_beacon` → `RvipWM.report`.
+- ev: `total_winner` → win (retire via `Q` after the Serpent; checked first,
+  so retirement's "Quitting" stays a win); `died_from` "Quitting" (suicide
+  `Q`), "Interrupting"/"Abortion" (signals) → quit; else death. Ctrl-X
+  save is no run end (not `is_dead`, no beacon).
+- Fields sent: g=zangband, ev, name=`player_name`, killer=`died_from` with
+  a/an/the/The stripped and hallucination "(?)" cut (death only),
+  depth=`p_ptr->depth`, score=`total_points()` (scores.c, what the hall of
+  fame stores), turns=`turn` (game turns, as the_score.turns), lvl=`p_ptr->lev`.
+  Missing: none. Note: score is 0 until the character gains exp.
+- Killer art: roguelikes-index `killers/make.py` `zangband()`, 883 PNGs from
+  `web/tiles.webp` via `graf-shb.prf`; "the-" prefix dropped to match the
+  stripped killer (`serpent-of-chaos.png`).
+- Tested (own tab, 127.0.0.1, patched fetch): suicide → `ev=quit`; debug
+  `0756 ^A n` → `ev=death&killer=Great%20hell%20wyrm`; win via a temporary
+  build that set `total_winner` in `do_cmd_suicide()` (reverted) → retire →
+  `ev=win`, then kingly screen; outbox 503 → URL with id/at kept, unblock +
+  `RvipWM.flush()` → same URL 204, outbox empty. Real Serpent kill not
+  tested (needs quest level 100 in the right dungeon). IDBFS `/zangband/*` deleted.
+
+### Next: RVIP complete (stage 9 was the last)

@@ -162,6 +162,10 @@ static long equip_value(void)
  * Now with up to 80% penalty for having mutations & other extra things  -GSN-
  * Fixed this up to be "fairer" -CK-
  */
+#ifdef USE_WEB
+extern void web_run_end(long score);
+#endif
+
 static long total_points(void)
 {
 	long temp;
@@ -1508,6 +1512,11 @@ void close_game(void)
 
 	if (p_ptr->state.is_dead)
 	{
+#ifdef USE_WEB
+		/* RVIP stage 9: report the run (main-web.c) */
+		web_run_end(total_points());
+#endif
+
 		/* Handle death */
 		close_game_handle_death();
 	}
