@@ -3284,7 +3284,7 @@ bool show_file(cptr name, cptr what, int line, int mode)
 				/* Extract the menu item */
 				k = isdigit(buf[7]) ? D2I(buf[7]) : buf[7] - 'A' + 10;
 
-				if ((buf[8] == ']') && (buf[9] == ' '))
+				if ((buf[8] == ']') && (buf[9] == ' ') && (k < 62))
 				{
 					/* Extract the menu item */
 					strncpy(hook[k], buf + 10, 31);
@@ -3601,7 +3601,7 @@ bool show_file(cptr name, cptr what, int line, int mode)
 			if (isdigit(k)) key = D2I(k);
 			else if (isalpha(k)) key = k - 'A' + 10;
 
-			if ((key > -1) && hook[key][0])
+			if ((key > -1) && (key < 62) && hook[key][0])
 			{
 				/* Recurse on that file */
 				if (!show_file(hook[key], NULL, 0, mode))

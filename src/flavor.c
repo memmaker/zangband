@@ -757,6 +757,9 @@ void object_desc(char *buf, const object_type *o_ptr, int pref, int mode,
 	
 	int len = 0;
 
+	/* Figurine/statue name: modstr points here after the switch */
+	char idol_name[512];
+
 	object_kind *k_ptr = &k_info[o_ptr->k_idx];
 
 	monster_race *r_ptr = &r_info[o_ptr->pval];
@@ -798,8 +801,6 @@ void object_desc(char *buf, const object_type *o_ptr, int pref, int mode,
 		{
 			/* Figurines/Statues */
 			cptr tmp = mon_race_name(r_ptr);
-			
-			char idol_name[512];
 
 			if (!FLAG(r_ptr, RF_UNIQUE))
 			{
