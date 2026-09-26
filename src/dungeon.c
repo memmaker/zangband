@@ -2473,6 +2473,13 @@ static void process_command(void)
 			break;
 		}
 
+		/* Auto-explore (RVIP) */
+		case 'H':
+		{
+			do_cmd_explore();
+			break;
+		}
+
 		case 'V':
 		{
 			/* Version info */
@@ -2622,7 +2629,8 @@ static void process_player(void)
 	/*** Handle "abort" ***/
 
 	/* Check for "player abort" */
-	if (p_ptr->state.running || p_ptr->cmd.rep || p_ptr->state.resting)
+	if (p_ptr->state.running || p_ptr->cmd.rep || p_ptr->state.resting ||
+		auto_explore)
 	{
 		/* Do not wait */
 		p_ptr->cmd.inkey_scan = TRUE;
@@ -2720,6 +2728,12 @@ static void process_player(void)
 
 			/* Take a turn */
 			p_ptr->state.energy_use = 100;
+		}
+
+		/* Auto-exploring (or walking to stairs) */
+		else if (auto_explore)
+		{
+			(void)explore_step();
 		}
 
 		/* Running */
@@ -2869,6 +2883,9 @@ static void evolve_dungeon(void)
 
 	/* Not leaving */
 	p_ptr->state.leaving = FALSE;
+
+	/* New level: stop auto-explore, forget what it saw */
+	explore_new_level();
 
 	/* Reset the "command" vars */
 	p_ptr->cmd.cmd = 0;

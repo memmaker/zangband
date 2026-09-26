@@ -76,3 +76,67 @@
   `p_ptr->depth == 0` there; dungeon entrances are places, not plain stairs.
   Stairs: `FEAT_LESS 0x06`, `FEAT_MORE 0x07` (`defines.h` ~l.1145); traps
   and glyphs are *fields* (`fld_idx`, `t_info`), not features.
+
+### Stage 2 (explore + stairs): done 2026-09-26
+- **Explore key `H`** (Quickband's key; free in the original keyset: `X` is
+  a `w0` keymap in `pref-key.prf`, `` ` `` becomes Escape in `util.c`).
+  Roguelike keyset: `H` stays "run west", so no explore key there.
+- Code: end of `src/cmd2.c` (port of Quickband `pathfind.c`
+  `explore_step()`): `auto_explore` flag, `explore_step()`,
+  `do_cmd_explore()`, `explore_to_stairs()`, `explore_reset()`,
+  `explore_new_level()`; prototypes in `externs.h`.
+- Hooks: `process_command()` `case 'H'` (`dungeon.c`); `process_player()`
+  treats `auto_explore` like running (key abort check + `else if
+  (auto_explore) explore_step();` before running); `dungeon()` calls
+  `explore_new_level()` where `leaving = FALSE`; `disturb()` (`effects.c`)
+  calls `explore_reset()`. `do_cmd_go_up/down()` (`cmd2.c`) call
+  `explore_to_stairs()` instead of "I see no ... staircase here".
+- **Known grid**: `parea(x, y)->feat != FEAT_NONE`, plus (dungeon only) the
+  explorer's own `explore_seen[MAX_HGT][MAX_WID]`, because Zangband forgets
+  torch-lit floors (`view_torch_grids` off) and the explorer would walk
+  back and forth. BFS array is indexed from `p_ptr->min_wid/min_hgt`
+  (wilderness window is 144x144, dungeon up to 66x198).
+- Targets: known grid next to an unknown one, or a grid with a seen object
+  (`OB_SEEN`) not yet stood on (marked with the free bit `OB_DUMMY4` as
+  `OB_EXPLORED`). Avoids known traps (`field_first_known(FTYPE_TRAP)`), shop
+  entrances (`FTYPE_BUILD`), known `FIELD_INFO_NO_ENTER` fields, lava/acid/
+  deep water; opens closed doors with `do_cmd_open_aux()`; locked doors
+  (`FEAT_CLOSED` + `FTYPE_DOOR` field) are never targets or walked through.
+  Stops: `disturb()`, a new message (`message_num()` changed), a visible
+  non-pet hostile monster in LOS (explore only; stair walks may flee), a
+  step that did not move (unseen monster), no light in the dungeon.
+- Wilderness: explore only inside the current town (`place[p_ptr->place_num]`
+  block rectangle); in daytime the town is fully known, so it says "Nothing
+  left to explore." `>` in town walks to the dungeon entrance (`FEAT_MORE`)
+  and descends (tested).
+- Option defaults: `init_web()` sets `auto_more` and `center_player` in
+  `option_info[]` (new characters; saves keep their own). Birth had no
+  `-more-`.
+- Help: `lib/help/command.txt` (H), `commdesc.txt` (Auto-explore, `<`/`>`).
+- Tested in the browser (own tab, 127.0.0.1): town `H` ("Nothing left"),
+  `>` walk + descend, dungeon level 1 explored over many presses (rooms,
+  corridors, doors, gold/items walked to, stops on monsters/messages), `<`
+  walk + up to town, `>` walk to a seen down staircase on level 1 →
+  level 2, explore there. Test IDBFS databases (`/zangband/lib/*`) deleted.
+- ASan (native `-DUSE_GCU`, pty, random keys weighted to `H`/`<`/`>`,
+  4 seeds x (2500 new + 2000 restored)): two upstream bugs fixed, then
+  clean: `do_cmd_macro_aux()` (`cmd4.c`) key burst overflowed `tmp` via
+  `ascii_to_text()` (now caps the trigger at 255 keys);
+  `get_player_sort_choice()` (`ui.c`) indexed `strings[INVALID_CHOICE]` on
+  Escape during birth.
+- Open problems: a visible monster blocking the only path makes `>`/`<`
+  say "You know of no way down/up"; explore knows a closed door is locked
+  before trying it (door field); no explore key in the roguelike keyset;
+  the move onto an object asks "Pick up ...? [y/n/k]" (game's own walk).
+
+### Next: stage 3 (Enter menu + inventory)
+- Keys: `request_command()` (`util.c`, keymaps via `keymap_act[mode][cmd]`,
+  `pref-key.prf` has a `C:0:^J` keymap) → `process_command()` switch in
+  `dungeon.c` (`case '\r'` exists there). Add the menu entry for `H`.
+- Template code (RVIP A3b/A3c): Zangband-style → TinyAngband's
+  `inkey_from_menu()` (`~/Games/tinyangband/src/util.c` / `autopick.c`,
+  `command_menu` option); item menus from Quickband `cmd-obj.c`
+  (`textui_inven_screen()`, `do_item_on()`), `get_item()` cursor keys,
+  `show_obj_list()` (`obj-ui.c`), reopen hook in `cmd0.c`. Zangband has its
+  own `menu_type` / `display_menu()` in `ui.c` (used by `do_cmd_options`,
+  macro menus) — check it before porting.

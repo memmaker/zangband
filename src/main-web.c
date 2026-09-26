@@ -327,6 +327,12 @@ errr init_web(int argc, char **argv, unsigned char *new_game)
 	(void)argv;
 	(void)new_game;
 
+	/* RVIP defaults for new characters: no -more- stops, centred map */
+	for (i = 0; option_info[i].o_desc; i++)
+		if (streq(option_info[i].o_text, "auto_more") ||
+			streq(option_info[i].o_text, "center_player"))
+			option_info[i].o_val = TRUE;
+
 	web_react();
 
 	for (i = 0; i < WEB_TERMS; i++)

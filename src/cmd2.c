@@ -49,7 +49,8 @@ void do_cmd_go_up(void)
 	}
 	else
 	{
-		msgf("I see no up staircase here.");
+		/* Walk to the nearest known up staircase, then take it */
+		explore_to_stairs(TRUE);
 		return;
 	}
 }
@@ -67,7 +68,8 @@ void do_cmd_go_down(void)
 
 	if (c_ptr->feat != FEAT_MORE)
 	{
-		msgf("I see no down staircase here.");
+		/* Walk to the nearest known down staircase, then take it */
+		explore_to_stairs(FALSE);
 		return;
 	}
 	else
@@ -2825,4 +2827,312 @@ void do_cmd_throw_aux(int mult)
 void do_cmd_throw(void)
 {
 	do_cmd_throw_aux(1);
+}
+
+
+/*
+ * RVIP auto-explore ('H'), ported from Quickband's pathfind.c.
+ * Walks one step per turn towards the nearest known grid next to an
+ * unknown one (known = memorised feature, parea()->feat), or to a seen
+ * object not yet stood on.  '<' / '>' reuse it to walk to the nearest
+ * known staircase and take it.  Stops on disturb() (keys, damage, ...),
+ * a new message, a visible hostile monster, or nothing left.  Never picks
+ * locks: locked doors (door fields) are neither targets nor walked through.  In the wilderness only the current town is explored.
+ */
+bool auto_explore = FALSE;
+
+/* Heading for stairs instead of exploring: 1 up, -1 down, 0 explore */
+static int explore_stairs = 0;
+static s16b explore_msgs;
+
+#define EXPL_H	(WILD_VIEW * WILD_BLOCK_SIZE)
+#define EXPL_W	MAX_WID
+
+/* Visited object marker (unused bit) */
+#define OB_EXPLORED	OB_DUMMY4
+
+/* Area to search */
+static int ex_x1, ex_y1, ex_x2, ex_y2;
+
+/*
+ * Grids seen on this dungeon level: Zangband forgets torch-lit floors
+ * (view_torch_grids is off by default), which would make the explorer
+ * walk back and forth.  Dungeon only; the wilderness window moves.
+ */
+static byte explore_seen[MAX_HGT][MAX_WID];
+
+void explore_reset(void)
+{
+	auto_explore = FALSE;
+	explore_stairs = 0;
+}
+
+void explore_new_level(void)
+{
+	explore_reset();
+	(void)C_WIPE(explore_seen, MAX_HGT * MAX_WID, byte);
+}
+
+static bool explore_in(int x, int y)
+{
+	return ((x >= ex_x1) && (x < ex_x2) && (y >= ex_y1) && (y < ex_y2) &&
+			in_boundsp(x, y) && in_bounds2(x, y));
+}
+
+static bool explore_known(int x, int y)
+{
+	if (p_ptr->depth && explore_seen[y][x]) return (TRUE);
+	return (parea(x, y)->feat != FEAT_NONE);
+}
+
+static bool explore_locked_door(int x, int y)
+{
+	cave_type *c_ptr = area(x, y);
+
+	return ((c_ptr->feat == FEAT_CLOSED) && field_is_type(c_ptr, FTYPE_DOOR));
+}
+
+static bool explore_passable(int x, int y)
+{
+	cave_type *c_ptr = area(x, y);
+	field_type *f_ptr;
+	byte feat = c_ptr->feat;
+
+	if (c_ptr->m_idx && m_list[c_ptr->m_idx].ml) return (FALSE);
+
+	/* Known traps, shop entrances, known blocking fields */
+	if (field_first_known(c_ptr, FTYPE_TRAP)) return (FALSE);
+	if (field_is_type(c_ptr, FTYPE_BUILD)) return (FALSE);
+	FLD_ITT_START (c_ptr->fld_idx, f_ptr)
+	{
+		if ((f_ptr->info & FIELD_INFO_MARK) &&
+			(f_ptr->info & FIELD_INFO_NO_ENTER) &&
+			(feat != FEAT_CLOSED)) return (FALSE);
+	}
+	FLD_ITT_END;
+
+	/* ponytail: fixed list of harmful terrain; use the move code's damage test if it grows */
+	if ((feat == FEAT_DEEP_LAVA) || (feat == FEAT_SHAL_LAVA) ||
+		(feat == FEAT_DEEP_ACID) || (feat == FEAT_SHAL_ACID) ||
+		(feat == FEAT_DEEP_WATER) || (feat == FEAT_OCEAN_WATER)) return (FALSE);
+
+	/* Doors we may open (locked ones are only walked to, see below) */
+	if (feat == FEAT_CLOSED) return (TRUE);
+
+	return (cave_floor_grid(c_ptr));
+}
+
+/* Known grid next to an unknown one inside the search area */
+static bool explore_frontier(int x, int y)
+{
+	int d;
+
+	for (d = 0; d < 8; d++)
+	{
+		int xx = x + ddx_ddd[d], yy = y + ddy_ddd[d];
+
+		if (explore_in(xx, yy) && !explore_known(xx, yy)) return (TRUE);
+	}
+	return (FALSE);
+}
+
+/* A seen object here the player has not stood on yet */
+static bool explore_item(int x, int y)
+{
+	object_type *o_ptr;
+
+	OBJ_ITT_START (area(x, y)->o_idx, o_ptr)
+	{
+		if ((o_ptr->info & OB_SEEN) && !(o_ptr->info & OB_EXPLORED)) return (TRUE);
+	}
+	OBJ_ITT_END;
+	return (FALSE);
+}
+
+static bool explore_is_stairs(int x, int y, int stairs)
+{
+	return (explore_known(x, y) &&
+			(area(x, y)->feat == ((stairs > 0) ? FEAT_LESS : FEAT_MORE)));
+}
+
+/* Returns FALSE (and stops) when there is nothing to do */
+bool explore_step(void)
+{
+	static s16b from[EXPL_H][EXPL_W];
+	static s16b qx[EXPL_H * EXPL_W];
+	static s16b qy[EXPL_H * EXPL_W];
+	int head = 0, tail = 0, y, x, d = 0, i;
+	int px = p_ptr->px, py = p_ptr->py;
+	bool found = FALSE, locked = FALSE;
+	object_type *o_ptr;
+
+	/* A new message since the last step stops us */
+	if (auto_explore && (message_num() != explore_msgs))
+	{
+		explore_reset();
+		return (FALSE);
+	}
+	auto_explore = FALSE;
+
+	/* Stood on these objects now */
+	OBJ_ITT_START (area(px, py)->o_idx, o_ptr)
+	{
+		o_ptr->info |= OB_EXPLORED;
+	}
+	OBJ_ITT_END;
+
+	/* Arrived at the stairs we were heading for: take them */
+	if (explore_stairs && (area(px, py)->feat ==
+						   ((explore_stairs > 0) ? FEAT_LESS : FEAT_MORE)))
+	{
+		i = explore_stairs;
+		explore_stairs = 0;
+		if (i > 0) do_cmd_go_up();
+		else do_cmd_go_down();
+		return (FALSE);
+	}
+
+	if (p_ptr->tim.confused || p_ptr->tim.image || p_ptr->tim.blind)
+	{
+		msgf(explore_stairs ? "You cannot find your way right now." :
+			 "You cannot explore right now.");
+		return (FALSE);
+	}
+
+	/* Without light the frontier never gets seen (would walk back and forth) */
+	if (!explore_stairs && p_ptr->depth && (p_ptr->cur_lite <= 0))
+	{
+		msgf("You have no light to explore by.");
+		return (FALSE);
+	}
+
+	/* Search area: the level, or the current town in the wilderness */
+	ex_x1 = p_ptr->min_wid;
+	ex_y1 = p_ptr->min_hgt;
+	ex_x2 = MIN(p_ptr->max_wid, p_ptr->min_wid + EXPL_W);
+	ex_y2 = MIN(p_ptr->max_hgt, p_ptr->min_hgt + EXPL_H);
+	if (!p_ptr->depth && !explore_stairs)
+	{
+		place_type *pl_ptr = &place[p_ptr->place_num];
+
+		if (!p_ptr->place_num)
+		{
+			msgf("There is nothing to explore here.");
+			return (FALSE);
+		}
+		ex_x1 = MAX(ex_x1, pl_ptr->x * WILD_BLOCK_SIZE);
+		ex_y1 = MAX(ex_y1, pl_ptr->y * WILD_BLOCK_SIZE);
+		ex_x2 = MIN(ex_x2, (pl_ptr->x + pl_ptr->xsize) * WILD_BLOCK_SIZE);
+		ex_y2 = MIN(ex_y2, (pl_ptr->y + pl_ptr->ysize) * WILD_BLOCK_SIZE);
+	}
+
+	/* Remember what is known now */
+	if (p_ptr->depth)
+		for (y = ex_y1; y < ex_y2; y++)
+			for (x = ex_x1; x < ex_x2; x++)
+				if (parea(x, y)->feat != FEAT_NONE) explore_seen[y][x] = 1;
+
+	/* Never explore towards danger (a stair walk may flee; disturb() stops it) */
+	for (i = 1; !explore_stairs && (i < m_max); i++)
+	{
+		monster_type *m_ptr = &m_list[i];
+
+		if (!m_ptr->r_idx || !m_ptr->ml) continue;
+		if (is_pet(m_ptr) || is_friendly(m_ptr)) continue;
+		if (!player_has_los_grid(parea(m_ptr->fx, m_ptr->fy))) continue;
+		msgf("Something is in view.");
+		return (FALSE);
+	}
+
+	/* Breadth-first search from the player */
+	for (y = ex_y1; y < ex_y2; y++)
+		for (x = ex_x1; x < ex_x2; x++) from[y - ex_y1][x - ex_x1] = -1;
+
+	from[py - ex_y1][px - ex_x1] = 8;
+	qx[tail] = px;
+	qy[tail++] = py;
+
+	while (head < tail)
+	{
+		x = qx[head];
+		y = qy[head++];
+
+		if (explore_stairs ? explore_is_stairs(x, y, explore_stairs) :
+			(((x != px) || (y != py)) && !explore_locked_door(x, y) &&
+			 (explore_frontier(x, y) || explore_item(x, y))))
+		{
+			found = TRUE;
+			break;
+		}
+
+		/* Don't walk through doors we can't open */
+		if (((x != px) || (y != py)) && explore_locked_door(x, y)) continue;
+
+		for (d = 0; d < 8; d++)
+		{
+			int xx = x + ddx_ddd[d], yy = y + ddy_ddd[d];
+
+			if (!explore_in(xx, yy) || (from[yy - ex_y1][xx - ex_x1] != -1)) continue;
+			if (!explore_known(xx, yy) || !explore_passable(xx, yy)) continue;
+			if (explore_locked_door(xx, yy) && explore_frontier(xx, yy)) locked = TRUE;
+			from[yy - ex_y1][xx - ex_x1] = d;
+			qx[tail] = xx;
+			qy[tail++] = yy;
+		}
+	}
+
+	if (!found)
+	{
+		if (explore_stairs)
+			msgf((explore_stairs > 0) ? "You know of no way up." :
+				 "You know of no way down.");
+		else
+			msgf(locked ? "Only locked doors are left to explore." :
+				 "Nothing left to explore.");
+		explore_stairs = 0;
+		return (FALSE);
+	}
+
+	/* Walk back to find the first step */
+	while (1)
+	{
+		d = from[y - ex_y1][x - ex_x1];
+		if ((x - ddx_ddd[d] == px) && (y - ddy_ddd[d] == py)) break;
+		x -= ddx_ddd[d];
+		y -= ddy_ddd[d];
+	}
+
+	x = px + ddx_ddd[d];
+	y = py + ddy_ddd[d];
+
+	/* Keep going next turn unless the step disturbs us */
+	explore_msgs = message_num();
+	auto_explore = TRUE;
+
+	/* Open a closed door, or take the step */
+	if (area(x, y)->feat == FEAT_CLOSED) (void)do_cmd_open_aux(x, y);
+	else
+	{
+		p_ptr->state.energy_use = 100;
+		move_player(ddd[d], FALSE);
+
+		/* Blocked (unseen monster, ...): stop instead of retrying forever */
+		if ((p_ptr->px == px) && (p_ptr->py == py)) explore_reset();
+	}
+
+	return (TRUE);
+}
+
+/* 'H': explore */
+void do_cmd_explore(void)
+{
+	explore_stairs = 0;
+	(void)explore_step();
+}
+
+/* '<' / '>' off the right stairs: walk to the nearest known one, take it */
+void explore_to_stairs(bool up)
+{
+	explore_stairs = up ? 1 : -1;
+	(void)explore_step();
 }

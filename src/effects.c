@@ -3496,6 +3496,9 @@ void notice_item(void)
  */
 void disturb(bool stop_search)
 {
+	/* Cancel auto-explore (and walking to stairs) */
+	explore_reset();
+
 	/* Cancel repeated commands */
 	if (p_ptr->cmd.rep)
 	{

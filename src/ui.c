@@ -340,6 +340,13 @@ int get_player_sort_choice(cptr *choices, int num, int col, int wid,
 	/* Get the choice */
 	choice = get_player_choice(strings, num, col, wid, helpfile, hook);
 
+	/* Escape (INVALID_CHOICE) etc.: nothing to invert */
+	if ((choice < 0) || (choice >= num))
+	{
+		FREE((void *)strings);
+		return (choice);
+	}
+
 	/* Invert the choice */
 	for (i = 0; i < num; i++)
 	{

@@ -1319,8 +1319,8 @@ static void do_cmd_macro_aux(char *buf)
 	/* Read the pattern */
 	while (i)
 	{
-		/* Save the key */
-		buf[n++] = i;
+		/* Save the key (a burst of keys must not overflow the caller's buffer) */
+		if (n < 255) buf[n++] = i;
 
 		/* Do not process macros */
 		p_ptr->cmd.inkey_base = TRUE;

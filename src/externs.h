@@ -315,6 +315,12 @@ extern void run_step(int dir);
 /* cmd2.c */
 extern void do_cmd_go_up(void);
 extern void do_cmd_go_down(void);
+extern bool auto_explore;
+extern void explore_reset(void);
+extern void explore_new_level(void);
+extern bool explore_step(void);
+extern void do_cmd_explore(void);
+extern void explore_to_stairs(bool up);
 extern void do_cmd_search(void);
 extern void do_cmd_toggle_search(void);
 extern int count_traps(int *x, int *y, bool under);
