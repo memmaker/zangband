@@ -40,6 +40,9 @@ emcc -O2 -fcommon -std=gnu99 -DUSE_WEB -Isrc -w \
 	--preload-file web/stage/lib@/zangband/lib
 
 cp web/index.html "$HOME/Games/rvip-tools/web/rvip-wm.js" web/zangband.js "$OUT/"
+# Shockbolt tiles (Angband 4.2 lib/tiles/shockbolt/64x64.png), lossless WebP, as in
+# ~/Games/tactical-angband; drawn nearest-neighbour; mapping: lib/pref/graf-shb.prf
+cp web/tiles.webp "$OUT/"
 # Sound effects and town music are stage 6; sound.cfg is in the preload
 mkdir -p "$OUT/music" && cp ../quickband/web/music/new_town.ogg "$OUT/music/"
 rm -rf web/stage

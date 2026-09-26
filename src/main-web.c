@@ -13,6 +13,7 @@
  */
 
 #include "angband.h"
+#include "maid-grf.h"
 
 #ifdef USE_WEB
 
@@ -28,11 +29,17 @@ static int web_want_save = 0;
 /* Last time we yielded to the browser */
 static double web_last_yield = 0;
 
+static void web_switch_graphics(int on);
+
 
 /* ---- JavaScript side (implemented in web/zangband.js) ---- */
 
-EM_JS(void, js_text, (int t, int x, int y, int n, int a, const char *s), {
-	Module.qb.text(t, x, y, n, a, s);
+/*
+ * x is a column of the page's cell grid; big = 1 in the big-tile region of
+ * the map, where one grid is two cells wide (Zangband's bigtile mode).
+ */
+EM_JS(void, js_text, (int t, int x, int y, int n, int a, const char *s, int big), {
+	Module.qb.text(t, x, y, n, a, s, big);
 });
 
 EM_JS(void, js_wipe, (int t, int x, int y, int n), {
@@ -48,8 +55,17 @@ EM_JS(void, js_curs, (int t, int x, int y, int w), {
 });
 
 EM_JS(void, js_pict, (int t, int x, int y, int n, const byte *ap, const char *cp,
-                      const byte *tap, const char *tcp), {
-	Module.qb.pict(t, x, y, n, ap, cp, tap, tcp);
+                      const byte *tap, const char *tcp, int big), {
+	Module.qb.pict(t, x, y, n, ap, cp, tap, tcp, big);
+});
+
+/* Tiles (1) or text (0) as the page's Tiles button says; -1: no change */
+EM_JS(int, js_tiles_wanted, (void), {
+	return Module.qb.tilesWanted();
+});
+
+EM_JS(int, js_tiles_switch, (void), {
+	return Module.qb.tilesSwitch();
 });
 
 EM_JS(void, js_fresh, (int t), {
@@ -191,6 +207,18 @@ static int web_pump(void)
 		got = 1;
 	}
 
+	/* Tiles <-> text: only while waiting for a command */
+	if (p_ptr->cmd.inkey_flag && character_generated && !got)
+	{
+		int on = js_tiles_switch();
+
+		if ((on >= 0) && (on != (use_graphics != GRAPHICS_NONE)))
+		{
+			web_switch_graphics(on);
+			got = 1;
+		}
+	}
+
 	/* Safe autosave: only while waiting for a command */
 	if (web_want_save && p_ptr->cmd.inkey_flag && character_generated &&
 	    !p_ptr->state.is_dead && !got && (Term->key_head == Term->key_tail))
@@ -274,29 +302,81 @@ static errr Term_xtra_web(int n, int v)
 	return (1);
 }
 
+/* Page column of term column x in row y (see js_text) */
+static int web_col(int x, int y)
+{
+	return is_bigtiled(x, y) ? 2 * x - Term->scr->big_x1 : x;
+}
+
+/* Length of the run from x that is all inside or all outside the big region */
+static int web_run(int x, int y, int n)
+{
+	int b = Term->scr->big_x1;
+
+	if (is_bigtiled(b, y) && (x < b) && (x + n > b)) return (b - x);
+	return (n);
+}
+
 static errr Term_curs_web(int x, int y)
 {
-	js_curs(web_idx(), x, y, 1);
+	js_curs(web_idx(), web_col(x, y), y, is_bigtiled(x, y) ? 2 : 1);
 	return (0);
 }
 
 static errr Term_wipe_web(int x, int y, int n)
 {
-	js_wipe(web_idx(), x, y, n);
+	while (n > 0)
+	{
+		int k = web_run(x, y, n), big = is_bigtiled(x, y);
+
+		js_wipe(web_idx(), web_col(x, y), y, big ? 2 * k : k);
+		x += k; n -= k;
+	}
 	return (0);
 }
 
 static errr Term_text_web(int x, int y, int n, byte a, cptr s)
 {
-	js_text(web_idx(), x, y, n, a, s);
+	while (n > 0)
+	{
+		int k = web_run(x, y, n);
+
+		js_text(web_idx(), web_col(x, y), y, k, a, s, is_bigtiled(x, y));
+		x += k; s += k; n -= k;
+	}
 	return (0);
 }
 
 static errr Term_pict_web(int x, int y, int n, const byte *ap, const char *cp,
                           const byte *tap, const char *tcp)
 {
-	js_pict(web_idx(), x, y, n, ap, cp, tap, tcp);
+	while (n > 0)
+	{
+		int k = web_run(x, y, n);
+
+		js_pict(web_idx(), web_col(x, y), y, k, ap, cp, tap, tcp, is_bigtiled(x, y));
+		x += k; ap += k; cp += k; tap += k; tcp += k; n -= k;
+	}
 	return (0);
+}
+
+
+/* Shockbolt tiles in big-tile mode, or text */
+static void web_graphics(int on)
+{
+	use_graphics = arg_graphics = on ? GRAPHICS_SHOCKBOLT : GRAPHICS_NONE;
+	use_transparency = on;
+	use_bigtile = arg_bigtile = on;
+}
+
+/* The page's Tiles button, applied at the command prompt */
+static void web_switch_graphics(int on)
+{
+	web_graphics(!on);
+	toggle_bigtile();
+	web_graphics(on);
+	reset_visuals();
+	do_cmd_redraw();
 }
 
 
@@ -334,6 +414,9 @@ errr init_web(int argc, char **argv, unsigned char *new_game)
 			option_info[i].o_val = TRUE;
 
 	web_react();
+
+	/* Shockbolt tiles (lib/pref/graf-shb.prf) unless the page says text */
+	web_graphics(js_tiles_wanted());
 
 	for (i = 0; i < WEB_TERMS; i++)
 	{

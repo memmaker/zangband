@@ -4960,6 +4960,7 @@ extern int PlayerUID;
 #define GRAPHICS_DAVID_GERVAIS	3
 #define GRAPHICS_ANY			4
 #define GRAPHICS_HALF_3D		5
+#define GRAPHICS_SHOCKBOLT		6	/* Shockbolt 64x64 (web: graf-shb.prf) */
 
 /*
  * Modes for the random name generator

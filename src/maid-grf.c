@@ -1665,6 +1665,30 @@ static cptr image_monster_hack =
 
 
 /*
+ * Shockbolt terrain drawn as torch / lit / dark in three tiles side by side;
+ * graf-shb.prf maps the feature to the lit one.  These are the lit tiles
+ * (floor, stairs, rubble, magma, quartz, veins with treasure, granite,
+ * permanent, lava) of lib/tiles/shockbolt/graf-shb-dark.prf of Angband 4.2.
+ */
+static bool shb_triplet(byte a, char c)
+{
+	static const byte lit[][2] = {
+		{0x9A, 0xC9}, {0x9A, 0xEF}, {0x9A, 0xF2}, {0x8C, 0xB5}, {0x96, 0xB4},
+		{0x96, 0xBA}, {0x96, 0xB7}, {0x96, 0xBD}, {0x96, 0xCC}, {0x99, 0x81},
+		{0x97, 0xD5}
+	};
+	int i;
+
+	if (use_graphics != GRAPHICS_SHOCKBOLT) return (FALSE);
+
+	for (i = 0; i < (int)(sizeof(lit) / sizeof(lit[0])); i++)
+		if ((a == lit[i][0]) && ((byte)c == lit[i][1])) return (TRUE);
+
+	return (FALSE);
+}
+
+
+/*
  * Mega-Hack -- Hallucinatory monster
  */
 static void image_monster(byte *ap, char *cp)
@@ -2137,6 +2161,11 @@ static void map_info(int x, int y, byte *ap, char *cp, byte *tap, char *tcp)
 					/* Use a dark tile */
 					c++;
 				}
+				else if (shb_triplet(a, c))
+				{
+					/* Shockbolt: torch, lit, dark */
+					c++;
+				}
 			}
 			else if (lite && view_yellow_lite)
 			{
@@ -2151,6 +2180,10 @@ static void map_info(int x, int y, byte *ap, char *cp, byte *tap, char *tcp)
 				{
 					/* Use a light tile */
 					c += 2;
+				}
+				else if (shb_triplet(a, c))
+				{
+					c--;
 				}
 			}
 		}

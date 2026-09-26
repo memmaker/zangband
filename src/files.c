@@ -769,6 +769,8 @@ static cptr process_pref_file_expr(char **sp, char *fp)
 						break;
 					case GRAPHICS_HALF_3D: v = "none";
 						break;
+					case GRAPHICS_SHOCKBOLT: v = "shb";
+						break;
 				}
 			}
 

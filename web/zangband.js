@@ -5,7 +5,7 @@
 (function () {
 	'use strict';
 
-	var TILE = 16;                 /* source tile size in 16x16.png */
+	var TILE = 64;                 /* source tile size in tiles.webp (Shockbolt) */
 		var PERSIST = ['/zangband/lib/save', '/zangband/lib/user', '/zangband/lib/apex', '/zangband/lib/bone'];
 
 	/* Term 0 main; the rest as in lib/pref/user-x11.prf */
@@ -111,6 +111,7 @@
 				Object.keys(d.font).forEach(function (k) {
 					if (s.font && s.font[k] >= FONT_MIN && s.font[k] <= FONT_MAX) d.font[k] = s.font[k];
 				});
+				d.text = s.text === true;
 				if (s.audio) d.audio = { sound: s.audio.sound === true, music: s.audio.music === true };
 				if (s.wm) d.wm = s.wm;
 				if (s.titles) Object.keys(s.titles).forEach(function (k) {
@@ -119,6 +120,7 @@
 			}
 		} catch (err) { /* no layout saved yet */ }
 		L = d;
+		renderTiles();
 		if (L.audio) { audio.sound = !!L.audio.sound; audio.music = !!L.audio.music; renderAudio(); }
 	}
 
@@ -351,6 +353,9 @@
 	}
 
 	function glyph(b) {
+		/* font-x11.prf uses the X11 fixed font's DEC graphics: 1 diamond, 2 wall */
+		if (b === 1) return '\u25C6';
+		if (b === 2) return '\u2592';
 		if (b < 32 || b === 127) return ' ';
 		return String.fromCharCode(b);
 	}
@@ -383,6 +388,17 @@
 		renderAudio();
 		updateMusic();
 	}
+
+	/* Tiles <-> text, applied by the game at its next command prompt */
+	var tilesSwitch = -1;
+	function toggleTiles() {
+		if (!tilesReady) return;
+		L.text = !L.text;
+		tilesSwitch = L.text ? 0 : 1;
+		saveLayout();
+		renderTiles();
+	}
+	function renderTiles() { $('btn-tiles').textContent = 'Tiles: ' + (L && L.text ? 'off' : 'on'); }
 
 	function renderAudio() {
 		$('btn-sound').textContent = 'Sound: ' + (audio.sound ? 'on' : 'off');
@@ -439,38 +455,36 @@
 			T.ctx.fillRect(x * T.cw, y * T.ch, n * T.cw, T.ch);
 		},
 
-		text: function (t, x, y, n, a, s) {
-			var T = terms[t], c = T.ctx, H = Module.HEAPU8;
+		/* big: map cells of the big-tile region, two cells wide (main-web.c) */
+		text: function (t, x, y, n, a, s, big) {
+			var T = terms[t], c = T.ctx, H = Module.HEAPU8, st = big ? 2 : 1;
 			if (!t && !y) for (var j = 0; j < n; j++) row0[x + j] = String.fromCharCode(H[s + j] || 32);
 			c.fillStyle = '#000';
-			c.fillRect(x * T.cw, y * T.ch, n * T.cw, T.ch);
+			c.fillRect(x * T.cw, y * T.ch, n * st * T.cw, T.ch);
 			c.fillStyle = color(a);
 			var cy = y * T.ch + T.ch / 2 + 1;
 			for (var i = 0; i < n; i++) {
 				var ch = H[s + i];
-				if (ch > 32) c.fillText(glyph(ch), (x + i) * T.cw + T.cw / 2, cy);
+				if (ch !== 32) c.fillText(glyph(ch), (x + i * st) * T.cw + st * T.cw / 2, cy);
 			}
 		},
 
-		pict: function (t, x, y, n, ap, cp, tap, tcp) {
-			var T = terms[t], c = T.ctx, H = Module.HEAPU8;
-			var w = T.cw * 2, h = T.ch;
+		pict: function (t, x, y, n, ap, cp, tap, tcp, big) {
+			var T = terms[t], c = T.ctx, H = Module.HEAPU8, st = big ? 2 : 1;
+			var w = T.cw * st, h = T.ch;
 			var sw = tiles.naturalWidth, sh = tiles.naturalHeight;
 			for (var i = 0; i < n; i++) {
 				var a = H[ap + i], k = H[cp + i];
 				var ta = H[tap + i], tk = H[tcp + i];
-				var px = (x + i) * T.cw, py = y * T.ch;
-
-				/* Right half of a big tile (AF_BIGTILE2) */
-				if ((a & 0xF0) === 0xF0 && k === 255) continue;
+				var px = (x + i * st) * T.cw, py = y * T.ch;
 
 				/* Not a tile: plain text in a graphics call */
 				if (!(a & 0x80) || !(k & 0x80) || !tilesReady) {
 					c.fillStyle = '#000';
-					c.fillRect(px, py, T.cw, h);
-					if (k > 32) {
+					c.fillRect(px, py, w, h);
+					if (k !== 32) {
 						c.fillStyle = color(a & 0x7F);
-						c.fillText(glyph(k), px + T.cw / 2, py + h / 2 + 1);
+						c.fillText(glyph(k), px + w / 2, py + h / 2 + 1);
 					}
 					continue;
 				}
@@ -498,6 +512,10 @@
 		fresh: function (t) { if (!t) RvipWM.prompt.text(row0.join('')); },   /* the message line over the map */
 
 		bell: function () { },
+
+		/* Tiles button: the game asks at start and at each command prompt */
+		tilesWanted: function () { return (tilesReady && !L.text) ? 1 : 0; },
+		tilesSwitch: function () { var s = tilesSwitch; tilesSwitch = -1; return s; },
 
 		nextEvent: function (atCmd) {
 			RvipWM.prompt.wait(atCmd);
@@ -785,7 +803,7 @@
 	}
 	tiles.onload = function () { tilesFinished(true); };
 	tiles.onerror = function () { tilesFinished(false); };
-	tilesDone = true;   /* text only until stage 4 (tiles: Shockbolt) sets tiles.src */
+	tiles.src = 'tiles.webp';   /* Shockbolt 64x64, drawn nearest-neighbour at cell size */
 
 	document.addEventListener('keydown', onKey);
 	document.addEventListener('DOMContentLoaded', function () {
@@ -801,6 +819,7 @@
 		$('btn-zoom-out').onclick = function () { zoomMain(-1); };
 		$('btn-sound').onclick = function () { toggleAudio('sound'); };
 		$('btn-music').onclick = function () { toggleAudio('music'); };
+		$('btn-tiles').onclick = toggleTiles;
 		renderAudio();
 
 		/* Buttons never take the keyboard focus away from the game */
