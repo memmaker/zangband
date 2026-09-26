@@ -369,18 +369,46 @@
   `new_town.ogg` is copied from `../quickband/web/music` (stage 7: keep
   or vendor into `web/music`).
 
-### Next: stage 7 (publish)
-- README first lines: upstream https://github.com/jjnoo/Zangband branch
-  `dev` @ `e177ff5` (2.7.6), compare link `…/compare/e177ff5...master`
-  (branch is `master`); lineage Angband → Zangband 1.0 (Topi Ylinen 1994)
-  → 2.x (Rühlmann, Fuerst, DevTeam) → 2.7.6 (JJ Mifsud); the web port
-  (`src/main-web.c`, `web/`), controls (`H` explore, `<`/`>` stair walk,
-  Enter menu, item menus), credits incl. Shockbolt and Dubtrain.
-- `~/Games/roguelikes-index` (`git pull` first): card like DynaHack's
-  commit `17d4c04` "index: DynaHack card + tree"; tree: Zangband already a
-  parent (`<span class="n">Zangband</span> 1994 · Topi Ylinen`, over
-  XAngband/TinyAngband, Hengband, PernAngband/ToME 2): turn that span into
-  the `zangband/` link, no new node.
-- Step 5b og block by hand in `web/index.html`; `web/deploy.sh` only after
-  the orchestrator created `memmaker/zangband` and the commits are pushed;
-  W2 row in RVIP.md.
+### Stage 7 (publish): done 2026-09-26
+- Live: https://ruzzoli.de/roguelikes/zangband/ (verified in own tab: birth
+  → town with Shockbolt tiles, Help opens; IDBFS `/zangband/lib/*` deleted
+  afterwards). Repo: https://github.com/memmaker/zangband (`master`),
+  README with upstream jjnoo/Zangband `dev` @ `e177ff5` + compare link.
+- Build self-contained: `web/music/new_town.ogg` committed (from Quickband),
+  `build.sh` no longer reads `../quickband`.
+- Selection page: roguelikes-index commit `3ec7ae8` "Add Zangband": card
+  (before TinyAngband), `zangband.png` (60 Shockbolt monsters, 32 px,
+  nearest), tree node Zangband → `zangband/` link (1994 · Topi Ylinen),
+  count 29. No Info button yet.
+- og block in `web/index.html` by hand (og.py second-loop logic, card
+  text + `zangband.png`); live `og:image` checked.
+- RVIP.md: W2 row, Part A row with URL, lesson (vendor sibling-repo build
+  inputs); rvip-tools commit `8ecca71` (not pushed).
+
+### Next: stage 8 (shrine)
+- Template: `~/Games/roguelikes-index/shrine/ularn.html` + `shrine/ularn/`
+  folder (copy shape; `shrine.css` shared).
+- Manual: `lib/help/*.txt` (general, command, commdesc, birth, charattr,
+  attack, defend, dungeon, town, bldg, gambling, magic, monster, objects,
+  option, pref; `interface.html`); copy into `shrine/zangband/` (licence
+  allows redistribution: Angband/Moria notice).
+- Licence: source header notice (`src/main.c` l.4-10, "Copyright (c) 1997
+  Ben Harrison, and others ... may be copied and distributed for
+  educational, research, and not for profit purposes"); no GPL file.
+- Changelog/history: `lib/help/version.txt` ("Zangband History and
+  Information"), `z_update.txt`, `z_faq.txt`, `readme`.
+- Cheats: web build has `USE_DEBUG` → `ALLOW_WIZARD` + `ALLOW_SPOILERS`
+  (`src/z-config.h`), wizard mode `^W`, debug commands `^A`
+  (`lib/help/wizard.txt`); `ALLOW_BORG` is defined and borg objects are
+  compiled (untested in the browser). Export/Import save-scumming via the
+  page.
+- Stats from `lib/edit/*.txt` (r_info, k_info, a_info, …) and
+  `src/defines.h` `MAX_*`; Lua realms in `lib/script/`.
+- Lineage to verify on the web: Zangband 1.0 1994 Topi Ylinen (from
+  Angband 2.6.x?), Robert Rühlmann, Steven Fuerst, DevTeam 2.3.0-2.7.5,
+  JJ Mifsud 2.7.6; children XAngband, Hengband, PernAngband/ToME.
+- Walkthrough: none known yet (check RogueBasin / zangband.org archive).
+- Three links: card Info button `shrine/zangband.html`, tree ✦ after the
+  Zangband link, game-title link in `web/index.html` `#bar h1`.
+- og block for the shrine by hand (og.py first-loop logic: title from the
+  shrine `<title>`, card text, `zangband.png`).
