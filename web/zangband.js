@@ -8,14 +8,15 @@
 	var TILE = 64;                 /* source tile size in tiles.webp (Shockbolt) */
 		var PERSIST = ['/zangband/lib/save', '/zangband/lib/user', '/zangband/lib/apex', '/zangband/lib/bone'];
 
-	/* Term 0 main; the rest as in lib/pref/user-x11.prf */
+	/* Term 0 main; what terms 1-6 show: web_window_flags[] in src/main-web.c */
 	var TERMS = [
 		{ id: 'main', title: '' },
 		{ id: 'inv', title: 'Inventory' },
 		{ id: 'msg', title: 'Messages' },
 		{ id: 'mon', title: 'Visible' },
 		{ id: 'rec', title: 'Recall' },
-		{ id: 'eqp', title: 'Equipment' }
+		{ id: 'eqp', title: 'Equipment' },
+		{ id: 'chr', title: 'Character' }
 	];
 
 	var palette = [];
@@ -163,7 +164,7 @@
 		var s = defaultLayout().split;
 		wm = RvipWM({
 			area: $('game'), menu: $('btn-layout'),
-			wins: [{ id: 'main', title: 'Map' }, { id: 'inv', title: 'Inventory' }, { id: 'msg', title: 'Messages' }, { id: 'mon', title: 'Visible' }, { id: 'rec', title: 'Recall' }, { id: 'eqp', title: 'Equipment' }],
+			wins: [{ id: 'main', title: 'Map' }, { id: 'inv', title: 'Inventory' }, { id: 'msg', title: 'Messages' }, { id: 'mon', title: 'Visible' }, { id: 'rec', title: 'Recall' }, { id: 'eqp', title: 'Equipment' }, { id: 'chr', title: 'Character' }],
 			multi: { d: 'v', r: s.bottom, a: { d: 'h', r: s.side, a: 'main', b: { d: 'v', r: s.inv, a: 'inv', b: 'mon' } }, b: 'msg' },
 			single: 'main',
 			state: L.wm, noFont: 'main',
@@ -535,8 +536,14 @@
 
 		sync: function () { syncFiles(); },
 
-		quit: function (msg) {
+		quit: function (msg, dead) {
 			running = false;
+			/* Death: the game showed tombstone + scores; straight into a new game */
+			if (dead && !msg) {
+				status('Starting a new game…');
+				syncFiles(function () { location.reload(); });
+				return;
+			}
 			syncFiles();
 			$('overlay-msg').textContent = msg ? msg : 'Your game has been saved.';
 			$('overlay').hidden = false;

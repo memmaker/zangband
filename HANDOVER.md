@@ -282,3 +282,52 @@
   guard line (deploy only pushed commits). No repo yet: no deploy before
   stage 7. `tiles.webp` is 13 MB: fine for rsync, mention in the page's
   loading status if slow.
+
+### Stage 5 (web page): done 2026-09-26
+- **Windows** (`rvip-wm.js`, shared copy; `web/index.html` `#t-<id>`,
+  `TERMS` in `web/zangband.js`, 7 terms = `WEB_TERMS` in `src/main-web.c`):
+  0 Map, 1 Inventory `PW_INVEN`, 2 Messages `PW_MESSAGE`, 3 Visible
+  `PW_VISIBLE`, 4 Recall `PW_MONSTER|PW_OBJECT`, 5 Equipment `PW_EQUIP`,
+  6 Character `PW_PLAYER` (new). Flags from `web_window_flags[]`, set in
+  `init_web()` (runs before birth/load: birth.c only fills windows 1/2 when
+  empty; a savefile brings its own flags, so pre-stage-5 test saves keep the
+  old routing). Default on: Map, Inventory, Visible, Messages; Recall,
+  Equipment, Character via Windows ▾. Fixes the inventory-in-Messages bug
+  (birth.c's defaults were 1 = messages, 2 = inventory).
+- **Layout file** `/zangband/lib/user/web-layout.json` (IDBFS; splits, wm
+  tree incl. which windows are on, zoom, fonts, titles, Tiles, audio).
+- **Game end**: one path, `close_game()` → `quit(NULL)` (`dungeon.c` end of
+  `play_game()`) → `quit_aux` = `hook_quit` (set in `init_web()`, after
+  main.c's own) → `js_quit(msg, p_ptr->state.is_dead)`. Death: tombstone
+  menu (D/C/T/Esc) + "Do you really want to exit?" + scores wait for keys in
+  C, then the page syncs and reloads; the dead save starts a new birth.
+  Ctrl-X: "Press Return", Hall of Fame, then the "Play again" overlay
+  (reload restores). Only other `exit()`: Lua panic (`lua/ldo.c`).
+- **Help**: `build.sh` writes a stub `help.html` (stage 6 replaces it).
+- **`web/deploy.sh`**: guard line from `roguelikes-index/deploy.sh`, target
+  `ruzzoli.de/roguelikes/zangband/`. Dry run: "commit + push first", exit 1.
+  **Not deployed, no repo.**
+- Tested (own tab, 127.0.0.1): new character → inventory in Inventory,
+  messages in Messages, soldier ant/newt/hell wyrm in Visible, equipment and
+  character sheet in theirs; gutter drag + Equipment/Character on → reload →
+  same layout; Ctrl-X → overlay → reload → character restored at DL1;
+  debug `0756 ^A n` (Great hell wyrm) → death → tombstone → Esc, y → page
+  reloaded → birth → new town character, windows right; Help opens/Esc
+  closes; no console errors. IDBFS `/zangband/lib/*` deleted afterwards.
+  Native ASan (1 seed, 2500 new + 1500 restored keys): clean.
+- Open problems: Character window cuts `display_player()` (needs 80 cols,
+  overlaps at narrow width); the Visible list's second symbol slot is the
+  graphics char (upstream format `Name ('a')/(tile)`); message history of a
+  dead character carries into the new one (upstream); spell list
+  (`PW_SPELL`) has no window; 13 MB `tiles.webp` loads slowly.
+
+### Next: stage 6 (docs + sound)
+- Sound: `lib/xtra/sound/sound.cfg` is already in the preload and
+  `loadSoundCfg()` in `web/zangband.js` reads it; add the wavs (Dubtrain,
+  a `web/sounds.py` like the template's), the event hook is z-term's
+  `Term_xtra(TERM_XTRA_SOUND)` → `js_sound()`; Sound/Music buttons exist,
+  off by default.
+- Help: `web/make-help.py` from `~/Games/tinyangband/web/` with
+  `PAGE='zangband.html'`; replace the stub line in `web/build.sh`.
+- Docs entry under `~/Desktop/Games/Roguelikes/Docs/` (`build-docs.py`,
+  `guides.py`, with a Tips section); credit Shockbolt tiles.

@@ -43,6 +43,8 @@ cp web/index.html "$HOME/Games/rvip-tools/web/rvip-wm.js" web/zangband.js "$OUT/
 # Shockbolt tiles (Angband 4.2 lib/tiles/shockbolt/64x64.png), lossless WebP, as in
 # ~/Games/tactical-angband; drawn nearest-neighbour; mapping: lib/pref/graf-shb.prf
 cp web/tiles.webp "$OUT/"
+# Help: stub until stage 6 (web/make-help.py from ~/Games/tinyangband)
+echo '<h2>Zangband</h2><p>The full guide comes with the docs. In the game: <kbd>?</kbd> help, <kbd>Enter</kbd> all commands, <kbd>H</kbd> explore, <kbd>&lt;</kbd>/<kbd>&gt;</kbd> walk to stairs, <kbd>Ctrl</kbd>+<kbd>X</kbd> save and quit.</p>' > "$OUT/help.html"
 # Sound effects and town music are stage 6; sound.cfg is in the preload
 mkdir -p "$OUT/music" && cp ../quickband/web/music/new_town.ogg "$OUT/music/"
 rm -rf web/stage

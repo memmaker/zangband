@@ -19,7 +19,7 @@
 
 #include <emscripten.h>
 
-#define WEB_TERMS 6		/* term 5: equipment (RVIP 5b) */
+#define WEB_TERMS 7		/* terms 1-6: see web_window_flags[] */
 
 static term web_term[WEB_TERMS];
 
@@ -119,8 +119,8 @@ EM_JS(int, js_next_event, (int at_cmd), {
 });
 
 
-EM_JS(void, js_quit, (const char *msg), {
-	Module.qb.quit(msg ? UTF8ToString(msg) : "");
+EM_JS(void, js_quit, (const char *msg, int dead), {
+	Module.qb.quit(msg ? UTF8ToString(msg) : "", dead);
 });
 
 EM_JS(void, js_plog, (const char *msg), {
@@ -392,12 +392,29 @@ static void hook_quit(cptr str)
 
 	for (i = 0; i < WEB_TERMS; i++) (void)term_nuke(&web_term[i]);
 
+	/* After death the tombstone and scores already waited for a key */
 	js_sync();
-	js_quit(str);
+	js_quit(str, p_ptr->state.is_dead);
 }
 
 
 cptr help_web[] = { "Browser front end", NULL };
+
+/*
+ * What each sub-window shows (TERMS in web/zangband.js).  Set here for new
+ * characters; birth.c only fills windows 1/2 when they are empty, and a
+ * savefile brings its own flags.
+ */
+static const u32b web_window_flags[WEB_TERMS] =
+{
+	0,
+	PW_INVEN,					/* 1 Inventory */
+	PW_MESSAGE,					/* 2 Messages */
+	PW_VISIBLE,					/* 3 Visible */
+	PW_MONSTER | PW_OBJECT,		/* 4 Recall */
+	PW_EQUIP,					/* 5 Equipment */
+	PW_PLAYER					/* 6 Character */
+};
 
 errr init_web(int argc, char **argv, unsigned char *new_game)
 {
@@ -412,6 +429,8 @@ errr init_web(int argc, char **argv, unsigned char *new_game)
 		if (streq(option_info[i].o_text, "auto_more") ||
 			streq(option_info[i].o_text, "center_player"))
 			option_info[i].o_val = TRUE;
+
+	for (i = 0; i < WEB_TERMS; i++) window_flag[i] = web_window_flags[i];
 
 	web_react();
 
