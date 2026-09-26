@@ -331,3 +331,56 @@
   `PAGE='zangband.html'`; replace the stub line in `web/build.sh`.
 - Docs entry under `~/Desktop/Games/Roguelikes/Docs/` (`build-docs.py`,
   `guides.py`, with a Tips section); credit Shockbolt tiles.
+
+### Stage 6 (docs + sound): done 2026-09-26
+- **Docs** (`~/Desktop/Games/Roguelikes/Docs`, not git): `GAMES` entry
+  `zangband.html` in `build-docs.py` (before Sil-Q; essentials, complete
+  list = original + roguelike keyset parsed from `lib/help/command.txt`,
+  sections About / Tips / In the browser / Credits), `GUIDES['zangband.html']`
+  (first section "What makes Zangband special") and `SAVING['zangband.html']`
+  in `guides.py`. `python3 build-docs.py` → `zangband.html` (140 keys).
+  Credits as the splash screen and help say: Topi Ylinen, Robert Rühlmann,
+  Steven Fuerst, DevTeam (2.3.0–2.7.5), JJ Mifsud (2.7.6); Angband (Ben
+  Harrison), Moria/Umoria; licence = the Angband/Moria notice in the sources
+  (no GPL file in this tree); Shockbolt © Raymond Gaustadnes 2012 (licence as
+  tactical-angband `docs/copying.rst`); Dubtrain sounds.
+- **Help**: `web/make-help.py` (TinyAngband's, `PAGE='zangband.html'`, key box
+  with `H`, adds a Credits section, "About this version" jjnoo/Zangband @
+  `e177ff5` + memmaker compare link) → `$OUT/help.html` in `build.sh` (stub
+  gone). After a Docs edit: rebuild or `python3 web/make-help.py >
+  web/dist/help.html`.
+- **Sound**: `web/sounds.py <cfg> <wavdir>` writes the web `sound.cfg` (all
+  65 `angband_sound_name[]` events, read from `src/variable.c`) into the
+  preload stage and copies 103 Dubtrain wavs (10 MB) to `dist/sound`.
+  Zangband names map to Dubtrain names in `MAP` (e.g. bite → mon_bite,
+  breath → breathe_*, fail → lockpick_fail); `walk` silent. Upstream
+  `lib/xtra/sound/sound.cfg` untouched (names wavs Zangband never shipped).
+  Some Dubtrain cfg entries name missing files; sounds.py skips them.
+  JS/C unchanged (hook `TERM_XTRA_SOUND` → `js_sound` → `Module.qb.sound`).
+- Tested (own tab, 127.0.0.1:8766): fresh load Sound off / Music off; Help
+  shows the guide (About … Credits, About this version); new Amberite
+  Warrior; Sound on (real click) → eat + drop fired `eat`/`drop`,
+  `plm_eat_bite.wav`/`plm_drop_boot.wav` loaded; Music on (real click) in
+  town → `music/new_town.ogg` 200; reload → both still on; no console
+  errors. IDBFS `/zangband/lib/*` deleted from `help.html`. No C change, no
+  ASan run.
+- Open problems: no hit/kill tested in the browser (same code path as
+  eat/drop); music plays on the whole surface (depth 0 = wilderness too);
+  `new_town.ogg` is copied from `../quickband/web/music` (stage 7: keep
+  or vendor into `web/music`).
+
+### Next: stage 7 (publish)
+- README first lines: upstream https://github.com/jjnoo/Zangband branch
+  `dev` @ `e177ff5` (2.7.6), compare link `…/compare/e177ff5...master`
+  (branch is `master`); lineage Angband → Zangband 1.0 (Topi Ylinen 1994)
+  → 2.x (Rühlmann, Fuerst, DevTeam) → 2.7.6 (JJ Mifsud); the web port
+  (`src/main-web.c`, `web/`), controls (`H` explore, `<`/`>` stair walk,
+  Enter menu, item menus), credits incl. Shockbolt and Dubtrain.
+- `~/Games/roguelikes-index` (`git pull` first): card like DynaHack's
+  commit `17d4c04` "index: DynaHack card + tree"; tree: Zangband already a
+  parent (`<span class="n">Zangband</span> 1994 · Topi Ylinen`, over
+  XAngband/TinyAngband, Hengband, PernAngband/ToME 2): turn that span into
+  the `zangband/` link, no new node.
+- Step 5b og block by hand in `web/index.html`; `web/deploy.sh` only after
+  the orchestrator created `memmaker/zangband` and the commits are pushed;
+  W2 row in RVIP.md.

@@ -21,7 +21,8 @@ done
 for d in edit file help pref; do cp -R lib/$d web/stage/lib/; done
 mkdir -p web/stage/lib/script && cp lib/script/*.lua web/stage/lib/script/
 mkdir -p web/stage/lib/data web/stage/lib/info web/stage/lib/save web/stage/lib/user web/stage/lib/apex web/stage/lib/bone
-mkdir -p web/stage/lib/xtra/sound && cp lib/xtra/sound/sound.cfg web/stage/lib/xtra/sound/
+# Sound: sound.cfg (Zangband event names) + Dubtrain wavs, written by web/sounds.py
+mkdir -p web/stage/lib/xtra/sound && python3 web/sounds.py web/stage/lib/xtra/sound/sound.cfg "$OUT/sound"
 find web/stage -name 'makefile*' -delete
 
 # Sources: LUAWOBJS/ANGOBJS/ZUTILOBJS/BORGOBJS/LUAOBJS of makefile.std, no main-*/maid-x11
@@ -43,9 +44,9 @@ cp web/index.html "$HOME/Games/rvip-tools/web/rvip-wm.js" web/zangband.js "$OUT/
 # Shockbolt tiles (Angband 4.2 lib/tiles/shockbolt/64x64.png), lossless WebP, as in
 # ~/Games/tactical-angband; drawn nearest-neighbour; mapping: lib/pref/graf-shb.prf
 cp web/tiles.webp "$OUT/"
-# Help: stub until stage 6 (web/make-help.py from ~/Games/tinyangband)
-echo '<h2>Zangband</h2><p>The full guide comes with the docs. In the game: <kbd>?</kbd> help, <kbd>Enter</kbd> all commands, <kbd>H</kbd> explore, <kbd>&lt;</kbd>/<kbd>&gt;</kbd> walk to stairs, <kbd>Ctrl</kbd>+<kbd>X</kbd> save and quit.</p>' > "$OUT/help.html"
-# Sound effects and town music are stage 6; sound.cfg is in the preload
+# Help: the game guide from ~/Desktop/Games/Roguelikes/Docs (zangband.html)
+python3 web/make-help.py > "$OUT/help.html"
+# Town music (depth 0), as Quickband/TinyAngband
 mkdir -p "$OUT/music" && cp ../quickband/web/music/new_town.ogg "$OUT/music/"
 rm -rf web/stage
 ls -la "$OUT"
