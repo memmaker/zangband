@@ -412,3 +412,27 @@
   Zangband link, game-title link in `web/index.html` `#bar h1`.
 - og block for the shrine by hand (og.py first-loop logic: title from the
   shrine `<title>`, card text, `zangband.png`).
+
+### Stage 8 (shrine): done 2026-09-26
+- Shrine: https://ruzzoli.de/roguelikes/shrine/zangband.html (roguelikes-index
+  `965e0f4` "Add Zangband shrine", `6d615e5` credits table fix; deployed,
+  live index == repo, all shrine links 200, checked in own tab at 375 px).
+  Files `shrine/zangband/`: `manual.html` (all `lib/help/*.txt` except
+  version.txt, generator kept out of the repo: plain escape into `<pre>`),
+  `history.txt` (= `version.txt`), `changelog.txt` (= `z_update.txt`, to
+  2.7.5pre1), `faq.txt` (= `z_faq.txt`, Steven Fuerst 2000), `license.txt`
+  (Angband/Moria not-for-profit notice + Lua note). og block by hand.
+- Three links live: card Info button, tree ✦ (tree text now "1994 · Topi
+  Ylinen; 2.x from Angband 2.8.1, later Robert Rühlmann, Steven Fuerst"),
+  game title → shrine (already in `web/index.html` since stage 5/7).
+- Lineage checked: RogueBasin ZAngband (1994, Topi Ylinen, based on Angband
+  2.8.1, last DevTeam release 2.7.5 Preview I 2005-06, site dead 2022),
+  Wikipedia Angband (Zangband 1994), `lib/help/version.txt` (Angband-- on PC
+  Angband 1.31 → DOS PC Zangband 1.0 → 2.x on Angband 2.8.1; Rühlmann from
+  2.1.0d). 2.7.6 = JJ Mifsud 2012–2013 (upstream git log).
+- Manual: complete (in-game help). Walkthrough: none exists; page gives
+  rules of thumb + FAQ, RogueBasin, archived zangband.org (web.archive.org;
+  zangband.org itself is now a spam domain), forum.angband.live.
+- Borg (`^Z`) compiled in, still untested in the browser.
+
+### Next: stage 9 (graveyard + leaderboard)
