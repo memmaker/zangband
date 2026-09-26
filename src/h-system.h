@@ -201,6 +201,11 @@ extern errr init_tnb(int argc, cptr *argv);
 extern cptr help_tnb[];
 #endif
 
+#ifdef USE_WEB
+extern errr init_web(int argc, char **argv, unsigned char *new_game);
+extern cptr help_web[];
+#endif
+
 /*
  * Type used to access a module
  */

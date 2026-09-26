@@ -25,6 +25,11 @@
  */
 static const module_type modules[] =
 {
+#ifdef USE_WEB
+	/* Registered as "x11" so the X11 pref files load (RVIP W3) */
+	{ "x11", help_web, init_web },
+#endif /* USE_WEB */
+
 #ifdef USE_GTK
 	INIT_MODULE(gtk),
 #endif /* USE_GTK */

@@ -99,7 +99,9 @@
  *
  * This will handle "gids" correctly once the permissions are set right.
  */
+#ifndef USE_WEB
 #define SAFE_SETUID
+#endif /* USE_WEB */
 
 
 /*
