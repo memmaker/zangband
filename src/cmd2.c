@@ -2966,6 +2966,15 @@ bool explore_step(void)
 	bool found = FALSE, locked = FALSE;
 	object_type *o_ptr;
 
+#ifdef USE_WEB
+	/* Paint every step: show the last one, then wait 40 ms */
+	if (auto_explore)
+	{
+		Term_fresh();
+		Term_xtra(TERM_XTRA_DELAY, 40);
+	}
+#endif
+
 	/* A new message since the last step stops us */
 	if (auto_explore && (message_num() != explore_msgs))
 	{
