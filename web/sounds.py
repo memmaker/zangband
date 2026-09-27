@@ -32,6 +32,10 @@ os.makedirs(out, exist_ok=True)
 lines = ['# Zangband web build: Dubtrain Angband Sound Pack v3.1.0 (web/sounds.py)', '[Sound]']
 for e in EVENTS:
     files = sorted({f for d in MAP.get(e, e).split() for f in pack.get(d, [])})
+    # DASP names lie: its 'shoot' has the melee swish; firing gets the arrow
+    # samples only, and a melee miss (SOUND_MISS, py_attack) the swish
+    if e == 'shoot': files = [f for f in files if f != 'plc_miss_swish.wav']
+    if e == 'miss': files = ['plc_miss_swish.wav']
     assert files or e == 'walk', 'no sample for ' + e
     for f in files:
         shutil.copy(os.path.join(PACK, f), out)
