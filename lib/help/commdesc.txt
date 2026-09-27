@@ -104,8 +104,8 @@ Run (.) or Run (,)
 
 Go up staircase (<)
      Climbs up an up staircase you are standing on. Anywhere else it
-     walks to the nearest up staircase you know of and takes it; a
-     disturbance stops the walk, pressing < again resumes it. There is always at
+     walks to the nearest up staircase you know of and stops there; a
+     disturbance stops the walk, pressing < again resumes it or climbs. There is always at
      least one staircase going up on every level except for the town
      level (this doesn't mean it's easy to find). Going up a staircase
      will take you to a new dungeon level unless you are at 50 feet
@@ -120,7 +120,7 @@ Go up staircase (<)
 Go down staircase (>)
      Descends a down staircase you are standing on. Anywhere else it
      walks to the nearest down staircase you know of (in the town: the
-     dungeon entrance) and takes it; pressing > again resumes. There are always
+     dungeon entrance) and stops there; pressing > again resumes or descends. There are always
      at least two staircases going down on each level, except for the
      town which has only one, and "quest" levels, which have none until
      the quest monster is killed. Going down a staircase will take you

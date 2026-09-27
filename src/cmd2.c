@@ -49,7 +49,7 @@ void do_cmd_go_up(void)
 	}
 	else
 	{
-		/* Walk to the nearest known up staircase, then take it */
+		/* Walk to the nearest known up staircase (and stop there) */
 		explore_to_stairs(TRUE);
 		return;
 	}
@@ -68,7 +68,7 @@ void do_cmd_go_down(void)
 
 	if (c_ptr->feat != FEAT_MORE)
 	{
-		/* Walk to the nearest known down staircase, then take it */
+		/* Walk to the nearest known down staircase (and stop there) */
 		explore_to_stairs(FALSE);
 		return;
 	}
@@ -2835,7 +2835,7 @@ void do_cmd_throw(void)
  * Walks one step per turn towards the nearest known grid next to an
  * unknown one (known = memorised feature, parea()->feat), or to a seen
  * object not yet stood on.  '<' / '>' reuse it to walk to the nearest
- * known staircase and take it.  Stops on disturb() (keys, damage, ...),
+ * known staircase (the player takes it).  Stops on disturb() (keys, damage, ...),
  * a new message, a visible hostile monster, or nothing left.  Never picks
  * locks: locked doors (door fields) are neither targets nor walked through.  In the wilderness only the current town is explored.
  */
@@ -2981,14 +2981,12 @@ bool explore_step(void)
 	}
 	OBJ_ITT_END;
 
-	/* Arrived at the stairs we were heading for: take them */
+	/* Arrived at the stairs we were heading for: stop; the player
+	   presses the key again to take them */
 	if (explore_stairs && (area(px, py)->feat ==
 						   ((explore_stairs > 0) ? FEAT_LESS : FEAT_MORE)))
 	{
-		i = explore_stairs;
 		explore_stairs = 0;
-		if (i > 0) do_cmd_go_up();
-		else do_cmd_go_down();
 		return (FALSE);
 	}
 
@@ -3130,7 +3128,7 @@ void do_cmd_explore(void)
 	(void)explore_step();
 }
 
-/* '<' / '>' off the right stairs: walk to the nearest known one, take it */
+/* '<' / '>' off the right stairs: walk to the nearest known one (and stop) */
 void explore_to_stairs(bool up)
 {
 	explore_stairs = up ? 1 : -1;
