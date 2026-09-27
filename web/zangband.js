@@ -399,7 +399,7 @@
 		saveLayout();
 		renderTiles();
 	}
-	function renderTiles() { $('btn-tiles').textContent = 'Tiles: ' + (L && L.text ? 'off' : 'on'); }
+	function renderTiles() { $('btn-tiles').textContent = 'Tiles: ' + (tilesReady && !(L && L.text) ? 'Shockbolt' : 'None'); }
 
 	function renderAudio() {
 		$('chk-sound').checked = !!audio.sound;
@@ -806,6 +806,7 @@
 		tilesReady = ok;
 		tilesDone = true;
 		if (!ok) status('Could not load the tile set; using text.', true);
+		if (L) renderTiles();
 		if (tilesWait) Module.removeRunDependency('tiles');
 	}
 	tiles.onload = function () { tilesFinished(true); };
