@@ -40,7 +40,7 @@ emcc -O2 -fcommon -std=gnu99 -DUSE_WEB -Isrc -w \
 	-sFORCE_FILESYSTEM -lidbfs.js -sENVIRONMENT=web \
 	--preload-file web/stage/lib@/zangband/lib
 
-cp web/index.html "$HOME/Games/rvip-tools/web/rvip-wm.js" web/zangband.js "$OUT/"
+cp web/index.html web/zangband.js "$OUT/"
 # Shockbolt tiles (Angband 4.2 lib/tiles/shockbolt/64x64.png), lossless WebP, as in
 # ~/Games/tactical-angband; drawn nearest-neighbour; mapping: lib/pref/graf-shb.prf
 cp web/tiles.webp "$OUT/"
