@@ -61,7 +61,6 @@
 	var GUT = 6, TITLE_H = 20, BORDER = 2;
 	var MIN_W = 90, MIN_H = 64, MAIN_MIN_W = 240, MAIN_MIN_H = 160;
 	var TILE_STEPS = [16, 20, 24, 28, 32, 36, 40, 44, 48, 56, 64];
-	var FONT_MIN = 8, FONT_MAX = 28;
 	var LAYOUT_FILE = '/zangband/lib/user/web-layout.json';
 	var SPLITS = ['side', 'bottom', 'inv', 'msg'];
 
@@ -88,14 +87,11 @@
 		/* Not laid out yet (hidden or zero-sized): assume a typical screen */
 		if (W < 400 || H < 300) { W = 1280; H = 720; }
 		var sideW = clamp(W * 0.24, 260, 440), botH = clamp(H * 0.19, 120, 220);
-		var font = W >= 1600 ? 14 : 12;
 		var fit = Math.min((W - sideW - GUT - BORDER) / 40, (H - botH - GUT - BORDER) / 24);
 		var tile = TILE_STEPS[0];
 		TILE_STEPS.forEach(function (t) { if (t <= fit) tile = t; });
-		var f = {};
-		TERMS.forEach(function (d, i) { if (i) f[d.id] = font; });
 		/* auto*: still following the window size (not customised yet) */
-		return { v: 1, tile: tile, font: f, titles: {}, autoSplit: true, autoTile: true,
+		return { v: 1, tile: tile, titles: {}, autoSplit: true, autoTile: true,
 			split: { side: (W - sideW) / W, bottom: (H - botH) / H, inv: 0.46, msg: 0.6 } };
 	}
 
@@ -111,16 +107,14 @@
 				d.autoSplit = s.autoSplit === true;
 				d.autoTile = s.autoTile === true;
 				if (d.autoSplit || d.autoTile) followWindow(d);
-				Object.keys(d.font).forEach(function (k) {
-					if (s.font && s.font[k] >= FONT_MIN && s.font[k] <= FONT_MAX) d.font[k] = s.font[k];
-				});
 				d.text = s.text === true;
 				if (s.audio) d.audio = { sound: s.audio.sound === true, music: s.audio.music === true };
 				if (s.wm) d.wm = s.wm;
+				if (s.font && d.wm && !d.wm.fs) d.wm.fs = s.font;   /* old layout: its text sizes go to the WM once */
 				if (typeof s.face === 'string') d.face = s.face;
 				if (typeof s.mapFace === 'string') d.mapFace = s.mapFace;
 				if (s.titles) Object.keys(s.titles).forEach(function (k) {
-					if (typeof s.titles[k] === 'string' && d.font[k]) d.titles[k] = s.titles[k].slice(0, 60);
+					if (typeof s.titles[k] === 'string' && k !== 'main' && TERMS.some(function (t) { return t.id === k; })) d.titles[k] = s.titles[k].slice(0, 60);
 				});
 			}
 		} catch (err) { /* no layout saved yet */ }
@@ -162,6 +156,11 @@
 	}
 
 	/* Windows are placed by the shared tiling window manager (rvip-wm.js) */
+	function zooms() {
+		var z = { main: function (size, d) { zoomMain(d); } };
+		TERMS.forEach(function (t, i) { if (i) z[t.id] = scheduleLayout; });
+		return z;
+	}
 	var wm = null;
 	function applyDom() { if (wm) wm.apply(); }
 	function makeWM() {
@@ -178,7 +177,7 @@
 				TERMS.forEach(function (d, i) { if (terms[i]) fitCanvas(i); });
 				scheduleSoon();
 			},
-			font: function (id, d) { if (id === 'main') zoomMain(d); else zoomSub(id, d); },   /* map: A-/A+ on its title bar */
+			zoom: zooms(),   /* A-/A+ (the WM keeps the sizes): Map steps its tiles, the text windows get new cells */
 			onReset: resetLayout
 		});
 		wm.apply();
@@ -199,7 +198,7 @@
 			cols = clamp(Math.floor(box.w / cw), 80, 255);
 			rows = clamp(Math.floor(box.h / ch), 24, 255);
 		} else {
-			font = L.font[TERMS[i].id];
+			font = RvipWM.fontSize(TERMS[i].id);
 			cw = Math.ceil(measure(font, i)); ch = Math.round(font * 1.3);
 			cols = clamp(Math.floor(box.w / cw), 1, 255);
 			rows = clamp(Math.floor(box.h / ch), 1, 255);
@@ -277,7 +276,7 @@
 	}
 
 
-	/* Zoom: main window tile size, sub window font size */
+	/* Zoom: main window tile size (text window sizes: the WM) */
 	function zoomMain(dir) {
 		var i = TILE_STEPS.indexOf(L.tile);
 		var n = clamp(i + dir, 0, TILE_STEPS.length - 1);
@@ -291,14 +290,6 @@
 		zoomMsgTimer = setTimeout(function () { status(''); }, 1200);
 	}
 	var zoomMsgTimer = 0;
-
-	function zoomSub(id, dir) {
-		var f = clamp(L.font[id] + dir, FONT_MIN, FONT_MAX);
-		if (f === L.font[id]) return;
-		L.font[id] = f;
-		scheduleLayout();
-		saveLayout();
-	}
 
 	function resetLayout() {
 		L = Object.assign(defaultLayout(), { audio: L.audio, wm: wm.state(), face: L.face, mapFace: L.mapFace, text: L.text });
