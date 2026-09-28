@@ -198,6 +198,8 @@
 		if (!i) {
 			ch = L.tile; cw = L.tile / 2;
 			font = Math.floor(Math.min(ch * 0.8, cw / 0.62));
+			/* text mode: the cell is as wide as the map font's glyphs (no overlap, no gaps) */
+			if (L.text || !tilesReady) cw = Math.ceil(measure(font, 0));
 			cols = clamp(Math.floor(box.w / cw), 80, 255);
 			rows = clamp(Math.floor(box.h / ch), 24, 255);
 		} else {
@@ -392,6 +394,7 @@
 	function toggleTiles() {
 		if (!tilesReady) return;
 		L.text = !L.text;
+		scheduleLayout();   /* text mode sizes map cells from the font */
 		tilesSwitch = L.text ? 0 : 1;
 		saveLayout();
 		renderTiles();
