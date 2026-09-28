@@ -1,0 +1,70 @@
+# Release builds for Linux and macOS (terminal, curses frontend) and
+# Windows (native Windows frontend, cross-compiled with MinGW).
+# Runs only on a version tag (git tag v1.0 && git push origin v1.0) or by hand.
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  GAME: zangband
+  EXE: zangband
+  FILES: lib README.md readme z_faq.txt
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runs-on: ubuntu-latest
+            deps: sudo apt-get update && sudo apt-get install -y libncurses-dev 
+            build: make -C src -f makefile.std gcu CFLAGS="-O2 -w -fcommon -DUSE_GCU" LIBS=-lncurses
+          - os: windows
+            runs-on: ubuntu-latest
+            deps: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64 
+            build: cd src && make -f makefile.std CFLAGS="-O2 -w" lua/tolua l-monst.c l-object.c l-player.c l-random.c l-ui.c l-misc.c l-spell.c l-field.c && rm -f lua/*.o && make -f makefile.std mingw-objs CC=x86_64-w64-mingw32-gcc RES=x86_64-w64-mingw32-windres RESCMD="angband.rc -O coff -o angband.res" CFLAGS="-O2 -w -fcommon -DWINDOWS" LIBS="-s -mwindows -lwinmm" && mv mingw-objs.exe ../zangband.exe
+          - os: macos
+            runs-on: macos-latest
+            deps: true
+            build: make -C src -f makefile.std gcu CFLAGS="-O2 -w -fcommon -DUSE_GCU" LIBS=-lncurses 
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: ${{ matrix.deps }}
+      - run: ${{ matrix.build }}
+      - name: package
+        shell: bash
+        run: |
+          d=$GAME-${{ matrix.os }}
+          mkdir $d
+          for f in $FILES; do [ -e "$f" ] && cp -r "$f" $d/; done
+          if [ ${{ matrix.os }} = windows ]; then
+            cp $EXE.exe $d/
+            zip -qr $d.zip $d
+          else
+            cp $EXE $d/
+            printf '#!/bin/sh\n# Terminal version: run in a terminal window of at least 80x24.\ncd "$(dirname "$0")" && exec ./%s -mgcu "$@"\n' $EXE > $d/play.sh
+            chmod +x $d/play.sh
+            tar czf $d.tar.gz $d
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.GAME }}-${{ matrix.os }}
+          path: ${{ env.GAME }}-${{ matrix.os }}.*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.GAME }}-*
