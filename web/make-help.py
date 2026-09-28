@@ -26,7 +26,7 @@ SAVING = '''<ul>
 <li><strong>Saving is automatic.</strong> Every save goes straight into this browser's storage (IndexedDB). The game saves every two minutes while it waits for your next command, and whenever you switch to another tab or window.</li>
 <li><kbd>Ctrl+S</kbd> saves and keeps playing. <kbd>Ctrl+X</kbd> saves and quits; reload the page (or press <em>Play again</em>) to continue.</li>
 <li>Reloading or closing the tab loses at most the last couple of minutes. The browser asks before you leave a running game.</li>
-<li>Each browser keeps <strong>one character</strong>. <em>New character</em> deletes it and starts over.</li>
+<li>Each browser keeps <strong>one character</strong>. <em>File ▾ → New game</em> deletes it and starts over.</li>
 <li><em>Export save</em> downloads your savefile; <em>Import save</em> loads one. Use them to keep a backup or to move a character to another browser or computer.</li>
 <li>Your window layout, zoom levels, window titles and the Tiles/Sound/Music buttons are stored in the same browser storage and survive a new character.</li>
 <li>Private/incognito windows and "clear site data" delete the stored game. Export first if the character matters.</li>
