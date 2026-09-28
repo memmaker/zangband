@@ -1247,7 +1247,7 @@ static void fix_player(void)
  */
 static void fix_message(void)
 {
-	int j, i;
+	int j, i, n;
 	int w, h;
 	int x, y;
 
@@ -1268,13 +1268,17 @@ static void fix_message(void)
 		/* Get size */
 		Term_get_size(&w, &h);
 
-		/* Dump messages */
+		/* Dump messages: the newest n fill the window from the top (web: no
+		   empty band above the first message), older ones scroll off */
+		n = MIN(message_num(), h);
 		for (i = 0; i < h; i++)
 		{
 			cptr attr = color_seq[message_color((s16b)i)];
 
+			if (i >= n) { Term_erase(0, i, 255); continue; }
+
 			/* Dump the message on the appropriate line */
-			put_fstr(0, (h - 1) - i, "%s%s", attr, message_str((s16b)i));
+			put_fstr(0, (n - 1) - i, "%s%s", attr, message_str((s16b)i));
 
 			/* Cursor */
 			(void)Term_locate(&x, &y);
