@@ -1626,7 +1626,7 @@ bool borg_use_unknown(void)
 bool borg_read_scroll_fail(int sval)
 {
 	/* Dark */
-	if (!map_loc(c_x, c_y)->flags & MAP_GLOW &&
+	if (!(map_loc(c_x, c_y)->flags & MAP_GLOW) &&
 		!bp_ptr->cur_lite) return (FALSE);
 
 	/* Blind or Confused */
