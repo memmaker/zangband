@@ -35,7 +35,7 @@ SAVING = '''<ul>
 WEB = '''<ul>
 <li><strong>Windows:</strong> the map fills the big window; Inventory and Visible (monsters and items in view) are on the right, Messages along the bottom. Recall, Equipment and Character can be turned on under <em>Windows</em>.</li>
 <li><strong>Resize windows</strong> by dragging the gaps between them. The windows always fill the screen and never overlap; the game redraws them at their new size. <em>Reset windows</em> puts everything back.</li>
-<li><strong>Zoom:</strong> <em>Zoom −</em> / <em>Zoom +</em> in the top bar change the size of the map tiles. Hover over a small window's title to show its <em>A−</em> / <em>A+</em> buttons, which change its text size.</li>
+<li><strong>Zoom:</strong> <em>A−</em> / <em>A+</em> on the Map title bar (shown on hover) change the size of the map tiles. Hover over a small window's title to show its <em>A−</em> / <em>A+</em> buttons, which change its text size.</li>
 <li><strong>Rename a window</strong> by clicking its title, typing a new name and pressing <kbd>Enter</kbd> (<kbd>Esc</kbd> cancels, an empty name restores the default).</li>
 <li><strong>Keys:</strong> arrow keys, the numeric keypad or <kbd>1</kbd>–<kbd>9</kbd> move you; <kbd>Shift</kbd> + direction runs. Zangband has no mouse support.</li>
 <li><strong>Tiles</strong> switches between Shockbolt tiles and text. <strong>Sound</strong> and <strong>Music</strong> are off by default; Music plays a town tune while you are on the surface (towns and wilderness).</li>
