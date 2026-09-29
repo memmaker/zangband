@@ -522,7 +522,9 @@ static void Term_bigtile_expand(int x, int y)
 {
 	int sy;
 	
-	int i;
+	int i, cx, cy;
+
+	bool cu;
 	
 	/* Disable bigtile */
 	if (Term->scr->wipe_bigtile)
@@ -537,11 +539,13 @@ static void Term_bigtile_expand(int x, int y)
 			/* Move bigscreen region to below text area */
 			Term->scr->big_y1 = y + 1;
 			
-			/* Wipe old bigtiled region */
+			/* Wipe old bigtiled region (Term_erase() moves the cursor: keep it) */
+			cx = Term->scr->cx, cy = Term->scr->cy, cu = Term->scr->cu;
 			for (i = sy; i < Term->scr->big_y1; i++)
 			{
 				Term_erase(Term->scr->big_x1, i, 255);
 			}
+			Term->scr->cx = cx, Term->scr->cy = cy, Term->scr->cu = cu;
 			
 			/* Hack - We need to redraw everything later */
 			Term->total_erase = TRUE;
@@ -1648,6 +1652,9 @@ void Term_clear(void)
 
 	/* Cursor usable */
 	Term->scr->cu = 0;
+
+	/* A whole new screen */
+	Term->scr->cleared = TRUE;
 
 	/* Cursor to the top left */
 	Term->scr->cx = Term->scr->cy = 0;

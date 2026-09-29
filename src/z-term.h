@@ -56,6 +56,9 @@ struct term_win
 	int big_x1;
 	int big_y1;
 	int big_y2;
+
+	/* Term_clear() ran on this window (main-web.c: a full-screen pop-up) */
+	bool cleared;
 	
 	term_win *next;
 };

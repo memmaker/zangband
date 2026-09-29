@@ -460,3 +460,25 @@
   tested (needs quest level 100 in the right dungeon). IDBFS `/zangband/*` deleted.
 
 ### Next: RVIP complete (stage 9 was the last)
+
+## Text windows (RVIP W0 rule 6, copied from the Sangband pilot / Easyband)
+- The map canvas is the only canvas and shows term 0's map area only
+  (`js_origin(COL_MAP, ROW_MAP, 1)`); sub-terms have fixed sizes
+  (`web_cols[]`/`web_rows[]`, lists 80 wide) and go to `<pre class="txt">`
+  as trimmed HTML rows (`web_sub_fresh()`); the sidebar + status line
+  (always `Term->hgt - 1` in xtra1.c, at any zoom) are the Status window
+  (`web_status()`, pane 8). No WEB_PAD: big tiles are a term region.
+- Pop-up (pane 7, `#pop`): term 0 while `!character_generated ||
+  (character_icky && Term->scr->next)` (only `screen_save()` raises icky;
+  `screen_load()` redraws before it lowers it). Saved screens are a stack
+  under `Term->scr`: the pop-up is the cells that differ from the oldest
+  (the map), unless a screen in the stack was cleared (`term_win.cleared`,
+  set by `Term_clear()`: stores, character sheet, map overview): then it is
+  the whole screen. The box ignores blank cells (z-term wipes the big-tile
+  rows a pop-up writes into).
+- Game fixes: `Term_bigtile_expand()` keeps the cursor (its `Term_erase()`
+  moved it: text written into a big-tile row landed at column 13, e.g.
+  "CON:" and "Gold" on the character sheet); `do_cmd_view_map()` is
+  wrapped in `screen_save()`/`screen_load()` (it drew over the sidebar).
+- List icons: tiles in pop-up lists (inventory prompts) as CSS sprites
+  (128 x 32 sheet); the sub-window lists draw no tiles. No mouse.

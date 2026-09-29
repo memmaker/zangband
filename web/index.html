@@ -50,6 +50,16 @@
 	.win > .t .zoom button { padding: 0 5px; font-size: 11px; line-height: 14px; height: 16px; }
 	.win > .body { flex: 1; min-height: 0; overflow: hidden; }
 	.win canvas { display: block; }
+	/* Text windows and the pop-up: HTML lines from the game (RVIP W0 rule 6), size = the WM's body font-size */
+	pre.txt { margin: 0; padding: 2px 4px; font: inherit; line-height: 1.25; color: #fff; }
+	.win > .body { font: 13px ui-monospace, Menlo, monospace; }
+	pre.txt > div { width: max-content; min-height: 1.25em; }
+	pre.txt .cu { outline: 1px solid #ff0; outline-offset: -1px; }
+	pre.txt .ic { display: inline-block; height: 1.25em; vertical-align: top; position: relative; }
+	pre.txt .ic > span { position: absolute; left: 50%; top: 50%; width: 1.2em; height: 1.2em; margin: -.6em 0 0 -.6em; image-rendering: pixelated; }
+	#pop { position: absolute; z-index: 3; overflow: auto; background: #000; border: 1px solid var(--line);
+		box-shadow: 0 6px 24px rgba(0,0,0,.6); font-family: ui-monospace, Menlo, monospace; }
+	#pop[hidden] { display: none; }
 	.split { position: absolute; background: var(--gut); z-index: 2; touch-action: none; }
 	.split.v { cursor: col-resize; }
 	.split.h { cursor: row-resize; }
@@ -119,12 +129,14 @@
 
 <div id="game" hidden>
 	<div class="win" id="t-main"><div class="body"><canvas></canvas></div></div>
-	<div class="win" id="t-inv"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><canvas></canvas></div></div>
-	<div class="win" id="t-eqp"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><canvas></canvas></div></div>
-	<div class="win" id="t-mon"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><canvas></canvas></div></div>
-	<div class="win" id="t-msg"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><canvas></canvas></div></div>
-	<div class="win" id="t-chr"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><canvas></canvas></div></div>
-	<div class="win" id="t-rec"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><canvas></canvas></div></div>
+	<div class="win" id="t-stat"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><pre class="txt"></pre></div></div>
+	<div class="win" id="t-inv"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><pre class="txt"></pre></div></div>
+	<div class="win" id="t-eqp"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><pre class="txt"></pre></div></div>
+	<div class="win" id="t-mon"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><pre class="txt"></pre></div></div>
+	<div class="win" id="t-msg"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><pre class="txt"></pre></div></div>
+	<div class="win" id="t-chr"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><pre class="txt"></pre></div></div>
+	<div id="pop" hidden><pre class="txt"></pre></div>
+	<div class="win" id="t-rec"><div class="t"><span class="name" title="Click to rename"></span></div><div class="body"><pre class="txt"></pre></div></div>
 </div>
 
 <div id="help" hidden>

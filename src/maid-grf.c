@@ -1157,6 +1157,9 @@ void do_cmd_view_map(void)
 	/* No overhead map in vanilla town mode. */
 	if (!p_ptr->depth && vanilla_town) return;
 
+	/* A full screen of its own (web: a pop-up over the map) */
+	screen_save();
+
 	/* Remember what the resize hook was */
 	hook = angband_term[0]->resize_hook;
 
@@ -1288,6 +1291,8 @@ void do_cmd_view_map(void)
 			}
 		}
 	}
+
+	screen_load();
 
 	/* Hack - change the redraw hook so bigscreen works */
 	angband_term[0]->resize_hook = hook;

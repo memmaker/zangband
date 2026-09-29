@@ -1,6 +1,9 @@
 /*
  * Zangband in the browser: terminal rendering, input and save persistence.
  * The game (zangband-core.js / .wasm) calls into Module.qb (see main-web.c).
+ * The map (term 0's map area) is the only canvas; every other window, the
+ * Status window and the pop-up are HTML text lines from the game (RVIP W0
+ * rule 6), list icons CSS sprites of tiles.webp sized in em.
  */
 (function () {
 	'use strict';
@@ -28,7 +31,6 @@
 
 	function $(id) { return document.getElementById(id); }
 
-	var row0 = [];   /* the main term's message row (row 0), for RvipWM.prompt */
 	var app = RvipApp({
 		name: 'zangband',
 		save: function () { return saveFilePath() || null; },
@@ -66,7 +68,7 @@
 	var MIN_W = 90, MIN_H = 64, MAIN_MIN_W = 240, MAIN_MIN_H = 160;
 	var TILE_STEPS = [16, 20, 24, 28, 32, 36, 40, 44, 48, 56, 64];
 	var LAYOUT_FILE = '/zangband/lib/user/web-layout.json';
-	var SPLITS = ['side', 'bottom', 'inv', 'msg'];
+	var SPLITS = ['side', 'bottom', 'inv', 'msg', 'stat'];
 
 	var L = null;             /* persisted layout state */
 	var rects = {};           /* current window rectangles, by id */
@@ -75,10 +77,11 @@
 
 	/* Font face per window: the map (text mode) has its own choice */
 	function face(i) { var n = L && (i ? L.face : L.mapFace); return n ? '"' + n + '", ' + FONT : FONT; }
-	function measure(fontPx, i) {
-		var c = document.createElement('canvas').getContext('2d');
-		c.font = fontPx + 'px ' + face(i);
-		return c.measureText('M').width;
+	var mctx = null;             /* the map canvas' context measures the map font */
+	function measure(fontPx) {
+		mctx = mctx || $('t-main').querySelector('canvas').getContext('2d');
+		mctx.font = fontPx + 'px ' + face(0);
+		return mctx.measureText('M').width;
 	}
 
 	function areaSize() {
@@ -96,7 +99,8 @@
 		TILE_STEPS.forEach(function (t) { if (t <= fit) tile = t; });
 		/* auto*: still following the window size (not customised yet) */
 		return { v: 1, tile: tile, titles: {}, autoSplit: true, autoTile: true,
-			split: { side: (W - sideW) / W, bottom: (H - botH) / H, inv: 0.46, msg: 0.6 } };
+			split: { side: (W - sideW) / W, bottom: (H - botH) / H, inv: 0.46, msg: 0.6,
+				stat: clamp(128 / (W - sideW), 0.08, 0.3) } };   /* Status: the 13-column sidebar at 13 px */
 	}
 
 	function loadLayout() {
@@ -158,29 +162,36 @@
 		el.style.height = Math.max(0, r[3]) + 'px';
 	}
 
-	/* Windows are placed by the shared tiling window manager (rvip-wm.js) */
-	function zooms() {
-		var z = { main: function (size, d) { zoomMain(d); } };
-		TERMS.forEach(function (t, i) { if (i) z[t.id] = scheduleLayout; });
-		return z;
+	/* A layout saved before the Status window existed: put it left of the map (once) */
+	function withStat(st, r) {
+		function has(n) { return n === 'stat' || (n && typeof n === 'object' && (has(n.a) || has(n.b))); }
+		function put(n) { return n === 'main' ? { d: 'h', r: r, a: 'stat', b: 'main' } : (n && typeof n === 'object') ? { d: n.d, r: n.r, a: put(n.a), b: put(n.b) } : n; }
+		if (!st || st.v !== 2) return st;
+		st = JSON.parse(JSON.stringify(st));
+		if (st.multi && !has(st.multi)) st.multi = put(st.multi);
+		return st;
 	}
+
+	/* Windows are placed by the shared tiling window manager (rvip-wm.js) */
 	var wm = null;
 	function applyDom() { if (wm) wm.apply(); }
 	function makeWM() {
 		var s = defaultLayout().split;
 		wm = RvipWM({
 			area: $('game'), menu: $('btn-layout'),
-			wins: [{ id: 'main', title: 'Map' }, { id: 'inv', title: 'Inventory' }, { id: 'msg', title: 'Messages' }, { id: 'mon', title: 'Visible' }, { id: 'rec', title: 'Recall' }, { id: 'eqp', title: 'Equipment' }, { id: 'chr', title: 'Character' }],
-			multi: { d: 'v', r: s.bottom, a: { d: 'h', r: s.side, a: 'main', b: { d: 'v', r: s.inv, a: 'inv', b: 'mon' } }, b: 'msg' },
-			single: 'main',
-			state: L.wm,
+			wins: [{ id: 'main', title: 'Map' }, { id: 'stat', title: 'Status' }, { id: 'inv', title: 'Inventory' }, { id: 'msg', title: 'Messages' }, { id: 'mon', title: 'Visible' }, { id: 'rec', title: 'Recall' }, { id: 'eqp', title: 'Equipment' }, { id: 'chr', title: 'Character' }],
+			multi: { d: 'v', r: s.bottom, a: { d: 'h', r: s.side, a: { d: 'h', r: s.stat, a: 'stat', b: 'main' }, b: { d: 'v', r: s.inv, a: 'inv', b: 'mon' } }, b: 'msg' },
+			single: { d: 'h', r: s.stat, a: 'stat', b: 'main' },
+			state: withStat(L.wm, s.stat),
 			save: function (st) { L.wm = st; saveLayout(); },
 			layout: function (r) {
 				rects = r;
-				TERMS.forEach(function (d, i) { if (terms[i]) fitCanvas(i); });
+				if (terms[0]) fitCanvas(0);
+				placePop();
 				scheduleSoon();
 			},
-			zoom: zooms(),   /* A-/A+ (the WM keeps the sizes): Map steps its tiles, the text windows get new cells */
+			/* A-/A+: map tile steps; the text windows are the WM's (body font-size); the pop-up follows Messages */
+			zoom: { main: function (s, d) { zoomMain(d); }, msg: popFont },
 			onReset: resetLayout
 		});
 		wm.apply();
@@ -192,22 +203,16 @@
 		return { w: Math.max(1, r[2] - BORDER), h: Math.max(1, r[3] - BORDER - ($('game').classList.contains('wm-single') ? 0 : TITLE_H)) };
 	}
 
-	/* Cell size, font and cols/rows for a window at the current zoom */
+	/* Cell size, font and cols/rows of the map term at the current zoom */
 	function termShape(i) {
 		var box = inner(i), cw, ch, font, cols, rows;
-		if (!i) {
-			ch = L.tile; cw = L.tile / 2;
-			font = Math.floor(Math.min(ch * 0.8, cw / 0.62));
-			/* text mode: the cell is as wide as the map font's glyphs (no overlap, no gaps) */
-			if (L.text || !tilesReady) cw = Math.ceil(measure(font, 0));
-			cols = clamp(Math.floor(box.w / cw), 80, 255);
-			rows = clamp(Math.floor(box.h / ch), 24, 255);
-		} else {
-			font = RvipWM.fontSize(TERMS[i].id);
-			cw = Math.ceil(measure(font, i)); ch = Math.round(font * 1.3);
-			cols = clamp(Math.floor(box.w / cw), 1, 255);
-			rows = clamp(Math.floor(box.h / ch), 1, 255);
-		}
+		ch = L.tile; cw = L.tile / 2;
+		font = Math.floor(Math.min(ch * 0.8, cw / 0.62));
+		/* text mode: the cell is as wide as the map font's glyphs (no overlap, no gaps) */
+		if (L.text || !tilesReady) cw = Math.ceil(measure(font));
+		/* the canvas shows the map area only (O: sidebar columns, message row, status row) */
+		cols = clamp(Math.floor(box.w / cw) + O.x, 80, 255);
+		rows = clamp(Math.floor(box.h / ch) + O.y + O.b, 24, 255);
 		return { cols: cols, rows: rows, cw: cw, ch: ch, font: font, face: face(i) };
 	}
 
@@ -217,7 +222,7 @@
 	 */
 	function fitCanvas(i) {
 		var T = terms[i], box = inner(i);
-		var w = T.cols * T.cw, h = T.rows * T.ch;
+		var w = vis(T).w, h = vis(T).h;
 		var sc = Math.min(1, box.w / w, box.h / h);
 		T.cv.style.width = (w * sc) + 'px';
 		T.cv.style.height = (h * sc) + 'px';
@@ -226,10 +231,11 @@
 	/* (Re)size one term's canvas; resizing the canvas also blanks it */
 	function configureTerm(i, l, cols, rows) {
 		var cv = $('t-' + TERMS[i].id).querySelector('canvas');
-		cv.width = cols * l.cw * dpr;
-		cv.height = rows * l.ch * dpr;
+		cv.width = (cols - O.x) * l.cw * dpr;
+		cv.height = (rows - O.y - O.b) * l.ch * dpr;
 		var ctx = cv.getContext('2d', { alpha: false });
-		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		/* term cells at their place, shifted so the map area starts at 0, 0 (the rest falls outside) */
+		ctx.setTransform(dpr, 0, 0, dpr, -O.x * l.cw * dpr, -O.y * l.ch * dpr);
 		ctx.imageSmoothingEnabled = false;
 		ctx.textBaseline = 'middle';
 		ctx.textAlign = 'center';
@@ -244,10 +250,12 @@
 	function buildTerms() {
 		loadLayout();
 		makeWM();
-		TERMS.forEach(function (d, i) {
-			var l = termShape(i);
-			configureTerm(i, l, l.cols, l.rows);
-		});
+		var l = termShape(0);
+		configureTerm(0, l, l.cols, l.rows);
+		TERMS.forEach(function (d, i) { if (i) textPane(i, document.querySelector('#t-' + d.id + ' pre')); });
+		textPane(P_POP, document.querySelector('#pop pre'));
+		textPane(P_STAT, document.querySelector('#t-stat pre'));
+		applyFace(); popFont();
 	}
 
 	/*
@@ -264,11 +272,9 @@
 	function scheduleLayout() {
 		if (!terms.length) return;
 		dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-		pending = TERMS.map(function (d, i) {
-			var l = termShape(i);
-			/* Unchanged terms need no work (unless the pixel ratio changed) */
-			return (!rects[d.id] || (sameShape(terms[i], l) && terms[i].dpr === dpr)) ? null : l;
-		});
+		/* only the map term follows its window; unchanged needs no work (unless the pixel ratio changed) */
+		var l = termShape(0);
+		pending = [(!rects.main || (sameShape(terms[0], l) && terms[0].dpr === dpr)) ? null : l];
 	}
 
 	/* Throttled version for live dragging */
@@ -346,6 +352,68 @@
 		input.addEventListener('blur', function () { finish(true); });
 	}
 
+	/* ---------- text windows (RVIP W0 rule 6): HTML lines from the game ----------
+	 * main-web.c web_row(): each changed row trimmed, colour runs "\x05#rrggbb" ..
+	 * "\x06", the cursor cell "\x01" .. "\x06", a tile icon "\x07" + a c ta tc (hex)
+	 * + width in cells; then the rows in use.  Text size = the WM's body font-size
+	 * (A-/A+ per window); the pop-up has the Messages size. */
+	var P_POP = TERMS.length, P_STAT = TERMS.length + 1;
+	/* term 0 cells the canvas leaves out (main-web.c js_origin): sidebar columns, rows above, rows below */
+	var O = { x: 0, y: 0, b: 0 };
+	function vis(T) { return { w: (T.cols - O.x) * T.cw, h: (T.rows - O.y - O.b) * T.ch }; }
+	var txt = [];                /* pane -> {el, lines, n, end} */
+	var pop = { x: -1, y: -1 };  /* the pop-up's first cell on term 0 */
+	function textPane(p, el) { el.textContent = ''; txt[p] = { el: el, lines: [], n: 0, end: null }; }
+	function mark(T) {           /* before a change: was the window at its end? */
+		var b = T.el.parentNode;
+		if (T.end == null) T.end = b.scrollTop + b.clientHeight >= b.scrollHeight - 4;
+	}
+	function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+	var TOK = /\x05#[0-9a-f]{6}|\x07[0-9a-f]{8}\d|[\x01\x06]|[^\x01\x05\x06\x07]+/g;
+	var SHEET_COLS = 128, SHEET_ROWS = 32, IC = 1.2;   /* tiles.webp: 128 x 32 Shockbolt tiles; icon side in em */
+	function sprite(a, k) {
+		return 'url(tiles.webp) ' + -(k & 0x7F) * IC + 'em ' + -(a & 0x7F) * IC + 'em / ' + SHEET_COLS * IC + 'em ' + SHEET_ROWS * IC + 'em no-repeat';
+	}
+	/* A tile icon (object/monster over its terrain) spanning w cells */
+	function iconHtml(t) {
+		var a = parseInt(t.substr(1, 2), 16), k = parseInt(t.substr(3, 2), 16), ta = parseInt(t.substr(5, 2), 16), tk = parseInt(t.substr(7, 2), 16);
+		var bg = sprite(a, k);
+		if ((ta & 0x80) && (tk & 0x80) && (ta !== a || tk !== k)) bg += ', ' + sprite(ta, tk);
+		return '<span class="ic" style="width:' + t.charAt(9) + 'ch"><span style="background:' + bg + '"></span></span>';
+	}
+	function rowHtml(s) {
+		var out = '', len = 0;
+		(s.match(TOK) || []).forEach(function (a) {
+			if (a === '\x01') out += '<span class="cu">';
+			else if (a === '\x06') out += '</span>';
+			else if (a[0] === '\x05') out += '<span style="color:' + a.slice(1) + '">';
+			else if (a[0] === '\x07') { out += iconHtml(a); len += +a.charAt(9); }
+			else { out += esc(a); len += a.length; }
+		});
+		return [out, len];
+	}
+	function drawRow(T, y) {
+		var d = T.el.children[y];
+		if (!d) return;
+		var h = rowHtml(T.lines[y] || '');
+		d.innerHTML = h[0]; d._len = h[1];
+	}
+	/* the top-bar font on every text window and the pop-up (the map has its own) */
+	function applyFace() {
+		var f = face(1);
+		document.querySelectorAll('pre.txt').forEach(function (e) { e.style.fontFamily = f; });
+	}
+	function popFont() { $('pop').style.fontSize = RvipWM.fontSize('msg') + 'px'; placePop(); }
+	/* at the pop-up's own cell over the map (the map term's cell size), inside the game area */
+	function placePop() {
+		var P = $('pop'), T = terms[0];
+		if (P.hidden || !T || pop.x < 0 || !rects.main) return;
+		var sc = parseFloat(T.cv.style.width) / vis(T).w || 1, dy = Math.max(0, Math.round((pop.y - O.y) * T.ch * sc));
+		P.style.marginTop = dy + 'px';
+		RvipWM.popup(P, { x: Math.max(0, Math.round((pop.x - O.x) * T.cw * sc)) });
+		P.style.maxHeight = Math.max(40, RvipWM.popupBox().h - dy) + 'px';
+	}
+
 	/* ---------- drawing (called from C) ---------- */
 
 	function color(a) {
@@ -415,7 +483,7 @@
 	}
 	/* Fonts: faces from the index page's fonts/ (web/build.sh lists them) */
 	function loadFace(n, now) {
-		var redraw = function () { if (terms.length) scheduleLayout(); };
+		var redraw = function () { applyFace(); if (terms.length) scheduleLayout(); };
 		if (!n) { if (now) redraw(); return; }
 		var ff = new FontFace(n, 'url(../fonts/' + n + '.woff)');
 		ff.load().then(function () { document.fonts.add(ff); redraw(); })
@@ -464,7 +532,6 @@
 		},
 
 		clear: function (t) {
-			if (!t) row0 = [];
 			var T = terms[t];
 			T.ctx.fillStyle = '#000';
 			T.ctx.fillRect(0, 0, T.cols * T.cw, T.rows * T.ch);
@@ -472,7 +539,6 @@
 
 		wipe: function (t, x, y, n) {
 			var T = terms[t];
-			if (!t && !y) for (var j = 0; j < n; j++) row0[x + j] = ' ';
 			T.ctx.fillStyle = '#000';
 			T.ctx.fillRect(x * T.cw, y * T.ch, n * T.cw, T.ch);
 		},
@@ -480,7 +546,6 @@
 		/* big: map cells of the big-tile region, two cells wide (main-web.c) */
 		text: function (t, x, y, n, a, s, big) {
 			var T = terms[t], c = T.ctx, H = Module.HEAPU8, st = big ? 2 : 1;
-			if (!t && !y) for (var j = 0; j < n; j++) row0[x + j] = String.fromCharCode(H[s + j] || 32);
 			c.fillStyle = '#000';
 			c.fillRect(x * T.cw, y * T.ch, n * st * T.cw, T.ch);
 			c.fillStyle = color(a);
@@ -531,7 +596,30 @@
 			c.strokeRect(x * T.cw + 0.5, y * T.ch + 0.5, w * T.cw - 1, T.ch - 1);
 		},
 
-		fresh: function (t) { if (!t) RvipWM.prompt.text(row0.join('')); },   /* the message line over the map */
+		fresh: function () { },
+		origin: function (x, y, b) { O = { x: x, y: y, b: b }; },
+		prompt: function (s) { RvipWM.prompt.text(s); },   /* term 0 row 0 over the map (main-web.c) */
+		line: function (p, y, s) {
+			var T = txt[p];
+			if (!T) return;
+			mark(T);
+			T.lines[y] = s;
+			if (y < T.n) drawRow(T, y);
+		},
+		rows: function (p, n) {
+			var T = txt[p];
+			if (!T) return;
+			mark(T);
+			while (T.el.children.length < n) { T.el.appendChild(document.createElement('div')); drawRow(T, T.el.children.length - 1); }
+			while (T.el.children.length > n) T.el.removeChild(T.el.lastChild);
+			T.n = n;
+			if (p === P_POP) { $('pop').hidden = !n; placePop(); }
+			/* Messages at its end stays there (the newest line is at the bottom); scrolled up, it stays put */
+			if (T.end && p === 2) T.el.parentNode.scrollTop = T.el.parentNode.scrollHeight;
+			T.end = null;
+		},
+		/* the pop-up's first cell on term 0 (-1: none): shown there over the map */
+		popAt: function (x, y) { pop.x = x; pop.y = y; if (x < 0) { txt[P_POP].lines = []; } placePop(); },
 
 		bell: function () { },
 
@@ -644,9 +732,9 @@
 	function onMouse(e) {
 		if (!app.running) return;
 		var T = terms[0], r = T.cv.getBoundingClientRect();
-		var sx = r.width / (T.cols * T.cw), sy = r.height / (T.rows * T.ch);
-		var x = Math.floor((e.clientX - r.left) / sx / T.cw);
-		var y = Math.floor((e.clientY - r.top) / sy / T.ch);
+		var sx = r.width / vis(T).w, sy = r.height / vis(T).h;
+		var x = Math.floor((e.clientX - r.left) / sx / T.cw) + O.x;
+		var y = Math.floor((e.clientY - r.top) / sy / T.ch) + O.y;
 		if (x < 0 || y < 0 || x >= T.cols || y >= T.rows) return;
 		events.push({ mouse: true, x: x, y: y, b: e.button === 2 ? 3 : e.button === 1 ? 2 : 1 });
 		e.preventDefault();
