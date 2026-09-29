@@ -44,9 +44,6 @@ cp web/index.html web/zangband.js "$OUT/"
 # Shockbolt tiles (Angband 4.2 lib/tiles/shockbolt/64x64.png), lossless WebP, as in
 # ~/Games/tactical-angband; drawn nearest-neighbour; mapping: lib/pref/graf-shb.prf
 cp web/tiles.webp "$OUT/"
-# Font choosers: the index page's fonts/*.woff (loaded from ../fonts/)
-FONTS="${FONTS:-$HOME/Games/roguelikes-index/fonts}"
-(ls "$FONTS" 2>/dev/null | sed -n 's/\.woff$//p') | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))' > "$OUT/fonts.json"
 # Help: the game guide from ~/Desktop/Games/Roguelikes/Docs (zangband.html)
 python3 web/make-help.py > "$OUT/help.html"
 # Town music (depth 0), vendored from Quickband

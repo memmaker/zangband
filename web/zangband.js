@@ -846,13 +846,9 @@
 		RvipWM.dropdown($('btn-audio'), $('menu-audio'));
 		RvipWM.dropdown($('btn-file'), $('menu-file'));
 		$('btn-tiles').onclick = toggleTiles;
-		fetch('fonts.json').then(function (r) { return r.json(); }).then(function (list) {
+		RvipWM.fonts.then(function (list) {
 			[[$('sel-font'), 'face'], [mapSel, 'mapFace']].forEach(function (a) {
-				list.forEach(function (n) {
-					var o = document.createElement('option');
-					o.value = n; o.textContent = n.replace(/^Web(Plus|437)_/, '').replace(/_/g, ' ');
-					a[0].appendChild(o);
-				});
+				RvipWM.fontOptions(a[0]);
 				a[0].value = (L && L[a[1]]) || '';
 			});
 		}).catch(function () { });
